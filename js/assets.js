@@ -1,38 +1,36 @@
-
 /**
  * assets.js
  * AssetManager for images & audio with progress + graceful fallbacks
  */
 (function(){
-  // Replace the IMG_PATHS + SFX_PATHS + MUSIC_PATH block:
-const IMG_PATHS = {
-  ritchie: "assets/img/ritchie.png",
-  button: "assets/img/button.png",
-  bg: "assets/img/background.png",
-  explosion: "assets/img/explosion.gif",   // NEW: one-shot explosion gif
-};
+  // Image & audio paths
+  const IMG_PATHS = {
+    ritchie: "assets/img/ritchie.png",
+    button: "assets/img/button.png",
+    bg: "assets/img/background.png",
+    explosion: "assets/img/explosion.gif",   // one-shot explosion gif
+  };
 
-const SFX_PATHS = {
-  // round signal (optional to keep)
-  arming: "assets/sfx/arming.wav",
+  const SFX_PATHS = {
+    // round signal (optional)
+    arming: "assets/sfx/arming.wav",
 
-  // clicks & gameplay
-  click: "assets/sfx/click.wav",
-  plunger: "assets/sfx/plunger.ogg",       // NEW
-  dud: "assets/sfx/dud.ogg",               // NEW
+    // clicks & gameplay
+    click: "assets/sfx/click.wav",
+    plunger: "assets/sfx/plunger.ogg",
+    dud: "assets/sfx/dud.ogg",
 
-  // sequences
-  priming: "assets/sfx/priming.ogg",       // NEW, drop-in start
-  start: "assets/sfx/start.ogg",           // NEW, fade “Start!”
-  countdown: "assets/sfx/countdown.ogg",   // NEW, real button
-  fanfare: "assets/sfx/fanfare.ogg",       // NEW, winner
+    // sequences
+    priming: "assets/sfx/priming.ogg",     // drop-in start
+    start: "assets/sfx/start.ogg",         // “Start!” text
+    countdown: "assets/sfx/countdown.ogg", // real button sequence
+    fanfare: "assets/sfx/fanfare.ogg",     // winner
 
-  // legacy win (kept for compatibility; unused now)
-  win: "assets/sfx/win.wav",
-};
+    // legacy win (kept for compatibility; unused now)
+    win: "assets/sfx/win.wav",
+  };
 
-const MUSIC_PATH = "assets/music/bgm.ogg";
-
+  const MUSIC_PATH = "assets/music/bgm.ogg";
 
   class AssetManager {
     constructor(onProgress){
