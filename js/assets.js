@@ -30,7 +30,8 @@
     win: "assets/sfx/win.wav",
   };
 
-  const MUSIC_PATH = "assets/music/bgm.ogg";
+  const MUSIC_PATH = "assets/music/bgm.ogg";       // in-game loop
+  const MENU_MUSIC_PATH = "assets/music/menu.ogg"; // menu loop
 
   class AssetManager {
     constructor(onProgress){
@@ -38,7 +39,9 @@
       this.images = {};
       this.sfx = {};
       this.musicUrl = MUSIC_PATH;
-      this.total = Object.keys(IMG_PATHS).length + Object.keys(SFX_PATHS).length + 1;
+      this.menuMusicUrl = MENU_MUSIC_PATH;
+      // Count images + sfx + 2 ticks for music references
+      this.total = Object.keys(IMG_PATHS).length + Object.keys(SFX_PATHS).length + 2;
       this.loaded = 0;
     }
     _tick(){
@@ -77,11 +80,12 @@
       for(const [k,src] of sfxEntries){
         this.sfx[k] = await this.loadAudioBuffer(audioCtx, src);
       }
-      // Count music as one progress tick (actual stream handled in AudioManager)
-      this._tick();
+      // Count both music paths as progress ticks (actual streaming handled in AudioManager)
+      this._tick(); // bgm
+      this._tick(); // menu
     }
   }
 
   window.AssetManager = AssetManager;
-  window.ASSET_PATHS = { IMG_PATHS, SFX_PATHS, MUSIC_PATH };
+  window.ASSET_PATHS = { IMG_PATHS, SFX_PATHS, MUSIC_PATH, MENU_MUSIC_PATH };
 })();
