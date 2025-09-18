@@ -160,4 +160,77 @@
         g.save();
         g.fillStyle = "#ffecd1";
         g.globalAlpha = 0.8;
-        g.fi
+        g.fillRect(0,0,CANVAS_BASE_W,CANVAS_BASE_H);
+        g.restore();
+      }
+    }
+
+    drawGameOver(game){
+      const g = this.ctx;
+      g.textAlign = "center";
+      g.font = FONTS.big;
+      g.fillStyle = "#fff";
+      g.fillText(game.winner ? `${game.winner.name} Wins!` : "Game Over", CANVAS_BASE_W/2, 180);
+    }
+
+    // --- SPRITES ---
+
+    drawRitchie(x, y, r){
+      const g = this.ctx;
+      if(this.assets.images.ritchie){
+        const img = this.assets.images.ritchie;
+        const w = r*1.6, h = r*1.6;
+        g.drawImage(img, x-w/2, y-h/2, w, h);
+      }else{
+        // simple placeholder balloon
+        g.fillStyle = "#ff7a59";
+        g.beginPath();
+        g.arc(x, y, r/2, 0, Math.PI*2);
+        g.fill();
+        // eyes
+        g.fillStyle = "#fff";
+        g.beginPath(); g.arc(x-20, y-5, 8, 0, Math.PI*2); g.fill();
+        g.beginPath(); g.arc(x+20, y-5, 8, 0, Math.PI*2); g.fill();
+        g.fillStyle = "#0b1020";
+        g.beginPath(); g.arc(x-20, y-5, 4, 0, Math.PI*2); g.fill();
+        g.beginPath(); g.arc(x+20, y-5, 4, 0, Math.PI*2); g.fill();
+        // string
+        g.strokeStyle = "#ffc9b9";
+        g.lineWidth = 3;
+        g.beginPath();
+        g.moveTo(x, y+r/2);
+        g.lineTo(x, y+r/2+40);
+        g.stroke();
+      }
+    }
+  }
+
+  class UILayer {
+    constructor(root){
+      this.root = root;
+      this.root.innerHTML = "";
+      this.rows = {};
+    }
+    clear(){ this.root.innerHTML=""; this.rows={}; }
+    row(id){
+      if(!this.rows[id]){
+        const div = document.createElement("div");
+        div.className = "ui-row";
+        this.root.appendChild(div);
+        this.rows[id] = div;
+      }
+      return this.rows[id];
+    }
+    button(text, cls, onClick, ariaLabel){
+      const b = document.createElement("button");
+      b.className = `ui-btn ${cls||""}`.trim();
+      b.textContent = text;
+      b.setAttribute("aria-label", ariaLabel || text);
+      b.addEventListener("click", onClick);
+      return b;
+    }
+  }
+
+  window.Renderer = Renderer;
+  window.UILayer = UILayer;
+})();
