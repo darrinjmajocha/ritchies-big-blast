@@ -85,12 +85,11 @@
       const startY = -150;
       const endY = 280;
       const y = startY + (endY - startY) * easeOutCubic(t);
-      this.drawRitchie(CANVAS_BASE_W/2, y, 160);
-
+      this.drawRitchie(CANVAS_BASE_W/2, y, 200); // bigger
       g.fillStyle = "#dbe4ff";
       g.font = FONTS.small;
       g.textAlign = "center";
-      g.fillText("Get ready…", CANVAS_BASE_W/2, y + 130);
+      g.fillText("Get ready…", CANVAS_BASE_W/2, y + 140);
     }
 
     drawStartPrompt(game, now){
@@ -117,7 +116,7 @@
 
       // Only draw Ritchie when allowed
       if(game.showRitchie){
-        this.drawRitchie(CANVAS_BASE_W/2, 260, 150);
+        this.drawRitchie(CANVAS_BASE_W/2, 260, 200); // bigger
       }
 
       // HUD
@@ -128,6 +127,26 @@
       g.fillText(`Current: ${cp?cp.name:"—"}`, 24, 34);
       g.fillText(`Remaining Players: ${game.hud.remainingPlayers}`, 24, 60);
       g.fillText(`Choices this round: ${game.hud.remainingChoices}`, 24, 86);
+
+      // DUD text (if active)
+      if(game.showDudUntil && performance.now() < game.showDudUntil){
+        g.save();
+        g.textAlign = "center";
+        g.font = FONTS.big;
+        g.fillStyle = "#ffffff";
+        g.fillText("Dud!", CANVAS_BASE_W/2, 150);
+        g.restore();
+      }
+
+      // COUNTDOWN overlay (if active)
+      if(game.state === window.GameStates.COUNTDOWN && game.countdownValue){
+        g.save();
+        g.textAlign = "center";
+        g.font = FONTS.big;
+        g.fillStyle = "#ffffff";
+        g.fillText(String(game.countdownValue), CANVAS_BASE_W/2, 150);
+        g.restore();
+      }
     }
 
     drawReveal(game){
@@ -139,7 +158,7 @@
       const img = this.assets.images.explosion;
       const g = this.ctx;
       if(img){
-        const w = 420, h = 320;
+        const w = 500, h = 380;
         g.drawImage(img, (CANVAS_BASE_W - w)/2, (CANVAS_BASE_H - h)/2, w, h);
       } else {
         // simple flash fallback
