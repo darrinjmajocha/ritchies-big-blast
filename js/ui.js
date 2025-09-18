@@ -99,11 +99,9 @@
     }
 
     drawStartPrompt(game, now){
-      // 3s total; fade in then out
       const total = 3000;
       const remain = Math.max(0, game.startPromptUntil - now);
       const t = 1 - (remain / total); // 0..1
-      // soft triangle fade (0→1→0)
       const alpha = 1 - Math.abs(2*t - 1);
       const eased = easeInOutSine(alpha);
 
@@ -122,7 +120,6 @@
 
       // Only draw Ritchie when allowed
       if(game.showRitchie){
-        // Base Ritchie position (consistent across screens)
         const rx = RITCHIE_PLAY_X;
         const ry = RITCHIE_PLAY_Y;
         const r = RITCHIE_R;
@@ -139,23 +136,19 @@
         }
       }
 
-      // HUD
+      // HUD (removed "Current: P#" as requested)
       g.font = FONTS.small;
       g.fillStyle = "#b8c0ff";
       g.textAlign = "left";
-      const cp = game.currentPlayer;
-      g.fillText(`Current: ${cp?cp.name:"—"}`, 24, 34);
-      g.fillText(`Remaining Players: ${game.hud.remainingPlayers}`, 24, 60);
-      g.fillText(`Choices this round: ${game.hud.remainingChoices}`, 24, 86);
+      g.fillText(`Remaining Players: ${game.hud.remainingPlayers}`, 24, 34);
+      g.fillText(`Choices this round: ${game.hud.remainingChoices}`, 24, 60);
     }
 
     drawReveal(game){
-      // Suspense only (no "Revealing…" text)
       this.drawPlaying(game);
     }
 
     drawCountdown(game){
-      // Big centered 3,2,1 during COUNTDOWN
       if(game.countdownValue === null) return;
       const g = this.ctx;
       g.save();
@@ -173,7 +166,6 @@
         const w = 520, h = 380;
         g.drawImage(img, (CANVAS_BASE_W - w)/2, (CANVAS_BASE_H - h)/2, w, h);
       } else {
-        // simple flash fallback
         g.save();
         g.fillStyle = "#ffecd1";
         g.globalAlpha = 0.8;
@@ -187,7 +179,8 @@
       g.textAlign = "center";
       g.font = FONTS.big;
       g.fillStyle = "#fff";
-      g.fillText(game.winner ? `${game.winner.name} Wins!` : "Game Over", CANVAS_BASE_W/2, 180);
+      // Winner text without player number
+      g.fillText("Winner!", CANVAS_BASE_W/2, 180);
     }
 
     // --- SPRITES ---
