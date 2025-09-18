@@ -56,6 +56,9 @@
       this.countdownValue = null;  // 3,2,1
       this.nextTickAt = 0;
 
+      // One-shot flag to reuse the intro drop without showing the Start! prompt
+      this.skipStartPromptOnce = false;
+
       this.hud = { remainingPlayers: 0, remainingChoices: 0 };
     }
 
@@ -83,6 +86,8 @@
       this.countdownStartAt = 0;
       this.countdownValue = null;
       this.nextTickAt = 0;
+
+      this.skipStartPromptOnce = false;
 
       this.hud = { remainingPlayers: 0, remainingChoices: 0 };
     }
@@ -169,11 +174,18 @@
           this.introAnimT = t;
           if(t >= 1){
             this.showRitchie = true;
-            this.state = States.START_PROMPT;
-            this.startPromptUntil = now + 3000; // fade text over 3s
-            window.audio?.playSfx("start");
-            // Start round & then (after prompt) start BGM in main loop
-            this.startRound();
+
+            if(this.skipStartPromptOnce){
+              // Fast-drop finish: go straight back to PLAYING (no Start! prompt, no new round)
+              this.skipStartPromptOnce = false;
+              this.state = States.PLAYING;
+            } else {
+              // Normal first drop: show the Start! prompt then begin the first round
+              this.state = States.START_PROMPT;
+              this.startPromptUntil = now + 3000; // fade text over 3s
+              window.audio?.playSfx("start");
+              this.startRound();
+            }
           }
         } break;
 
@@ -200,7 +212,7 @@
               this.nextTickAt = now + 1000; // first tick in 1.0s
               this.state = States.COUNTDOWN;
             }else{
-              // Dud: keep Ritchie, play dud, show “Dud!” for ~1s, then resume
+              // DUD: keep Ritchie, play dud, show “Dud!” for ~1s, then resume
               window.audio?.playSfx("dud");
               this.showDudUntil = now + 1000;
               this.state = States.SAFE_HOLD;
@@ -214,18 +226,28 @@
             this.pendingReveal = null;
 
             // Anti-inevitability: if only one unpicked remains AND it's the bomb,
-            // reset the round choices and re-arm via RNG (same count).
+            // reset the round choices and re-arm via RNG (same count), then do a fast drop.
             const remaining = this.roundChoices.filter(c=>!c.taken).map(c=>c.idx);
             if(remaining.length === 1 && remaining[0] === this.armedIndex){
               const n = this.roundChoices.length;
               this.roundChoices.forEach(c=>{ c.taken=false; });
               this.armedIndex = this.rng.pickInt(0, n-1);
               this.hud.remainingChoices = n;
-              window.audio?.playSfx("arming");
+
+              // Quick re-intro: drop from top at 2x speed, skip Start! prompt
+              this.showRitchie = false;
+              this.introDurMs = 1500;             // 2x faster
+              this.introStartAt = now;
+              this.introAnimT = 0;
+              this.skipStartPromptOnce = true;
+              this.state = States.INTRO_ANIM;
+              window.audio?.playSfx("priming");
+              // Don't advance player or resume music yet; the loop will animate the drop
+              return;
             }
 
+            // Normal dud flow: next player and fade music back
             this.nextPlayer();
-            // Ease music back to 100% over ~3s
             window.audio?.fadeMusicTo(1, 3000);
             this.state = States.PLAYING;
           }
