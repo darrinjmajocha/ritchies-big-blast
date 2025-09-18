@@ -1,7 +1,13 @@
 /**
  * audio.js
  * AudioManager: WebAudio if possible; else HTMLAudio fallbacks.
- * Exposes: playSfx(name), playMusic(loop=true), stopMusic(), setMusicVolume(v), fadeMusicTo(target, ms)
+ * Exposes:
+ *   playSfx(name)
+ *   playGameMusic(loop=true)
+ *   playMenuMusic(loop=true)
+ *   stopMusic()
+ *   setMusicVolume(v)
+ *   fadeMusicTo(target, ms)
  */
 (function(){
   class AudioManager {
@@ -16,6 +22,7 @@
       this.preferred = "webaudio";
       this.musicVolume = (window.CONSTS?.AUDIO?.musicVolume) ?? 0.5;
       this.sfxVolume = (window.CONSTS?.AUDIO?.sfxVolume) ?? 0.9;
+      this._currentTrack = "none"; // "menu" | "game" | "none"
     }
 
     async init(){
@@ -56,24 +63,19 @@
         src.connect(gain).connect(this.masterGain);
         src.start(0);
       }else{
-        // HTMLAudio fallback; let the browser cache it
         const a = new Audio(path);
         a.volume = this.sfxVolume;
         a.play().catch(()=>{/* ignore */});
       }
     }
 
-    /** Stream music via HTMLAudio even if WebAudio exists (simpler looping), but control its volume through WebAudio if available */
-    async playMusic(loop=true){
+    async _play(url, loop){
       if(!this.enabled) return;
       try{
-        // Stop existing
         this.stopMusic();
-        // Create media element
-        this.musicEl = new Audio(this.assets.musicUrl);
+        this.musicEl = new Audio(url);
         this.musicEl.loop = loop;
         this.musicEl.volume = this.preferred==="webaudio" ? 1 : this.musicVolume;
-        // If WebAudio available, route through MediaElementSource to control volume smoothly
         if(this.preferred==="webaudio" && this.ctx){
           const src = this.ctx.createMediaElementSource(this.musicEl);
           src.connect(this.musicGain).connect(this.masterGain);
@@ -86,6 +88,16 @@
       }
     }
 
+    async playGameMusic(loop=true){
+      this._currentTrack = "game";
+      await this._play(this.assets.musicUrl, loop);
+    }
+
+    async playMenuMusic(loop=true){
+      this._currentTrack = "menu";
+      await this._play(this.assets.menuMusicUrl, loop);
+    }
+
     stopMusic(){
       if(this.musicEl){
         this.musicEl.pause();
@@ -93,6 +105,7 @@
         this.musicEl.src = "";
         this.musicEl = null;
       }
+      this._currentTrack = "none";
     }
 
     setMusicVolume(v){
