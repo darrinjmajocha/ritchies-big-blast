@@ -2,16 +2,16 @@
   const States = Object.freeze({
     TITLE: "TITLE",
     SETUP: "SETUP",
-    INTRO_ANIM: "INTRO_ANIM",   // balloon drop-in
+    INTRO_ANIM: "INTRO_ANIM",    // balloon drop-in
     START_PROMPT: "START_PROMPT",// show "Start!" (fade 3s)
     PLAYING: "PLAYING",
-    REVEAL: "REVEAL",           // suspense period after plunger
-    SAFE_HOLD: "SAFE_HOLD",     // 1s pause after dud
-    EXPLODING: "EXPLODING",     // play explosion gif once
+    REVEAL: "REVEAL",            // suspense period after plunger
+    SAFE_HOLD: "SAFE_HOLD",      // 1s pause after dud + "Dud!" text
+    COUNTDOWN: "COUNTDOWN",      // 0.5s beat, then 3→2→1 at 0.5s each
+    EXPLODING: "EXPLODING",      // play explosion gif once
     ELIMINATE: "ELIMINATE",
     NEXT_ROUND: "NEXT_ROUND",
     GAME_OVER: "GAME_OVER",
-    FADE_OUT: "FADE_OUT",       // 5s winner then fade to setup
   });
 
   class RNG {
@@ -45,11 +45,16 @@
 
       this.showRitchie = false;    // hidden until after player select & drop
       this.startPromptUntil = 0;   // when to end the "Start!" text
-      this.fadeBlackUntil = 0;     // fade-to-black timer for GAME_OVER->SETUP
+      this.fadeBlackUntil = 0;     // not used now; we return straight to SETUP after winner hold
       this.explodingUntil = 0;     // explosion gif window
 
-      // NEW: DUD text timing
+      // Dud overlay
       this.showDudUntil = 0;
+
+      // Countdown
+      this.countdownStartAt = 0;
+      this.countdownValue = null;  // 3,2,1
+      this.nextTickAt = 0;
 
       this.hud = { remainingPlayers: 0, remainingChoices: 0 };
     }
@@ -74,8 +79,10 @@
       this.fadeBlackUntil = 0;
       this.explodingUntil = 0;
 
-      // NEW: reset DUD text
       this.showDudUntil = 0;
+      this.countdownStartAt = 0;
+      this.countdownValue = null;
+      this.nextTickAt = 0;
 
       this.hud = { remainingPlayers: 0, remainingChoices: 0 };
     }
@@ -102,7 +109,7 @@
       this.roundChoices = Array.from({length: choices}, (_,i)=>({ idx:i, taken:false, label:`${i+1}` }));
       this.armedIndex = this.rng.pickInt(0, choices-1);
       this.hud.remainingChoices = choices;
-      // optional: arming cue (still allowed)
+      // optional: arming cue
       window.audio?.playSfx("arming");
     }
 
@@ -125,6 +132,21 @@
       this.currentPlayerIdx = i;
     }
 
+    // Reveal delay increases (up to 5s) as fewer choices remain
+    computeRevealDelay(){
+      const total = this.roundChoices.length;
+      const remaining = this.roundChoices.filter(c=>!c.taken).length;
+      // fraction of suspense: more suspense with fewer remaining
+      const p = 1 - (remaining-1)/(total-1 || 1); // 0 when many, →1 when few
+      const baseMin = 500;      // ms
+      const extraMax = 4500;    // up to 5s total
+      // Quadratic bias + random factor
+      const r = this.rng.next();
+      const weight = p*p;       // stronger near end
+      const delay = baseMin + (extraMax * weight * (0.5 + 0.5*r)); // avoid always tiny values
+      return Math.min(5000, Math.floor(delay));
+    }
+
     selectChoice(index){
       if(this.state!=="PLAYING") return;
       const choice = this.roundChoices[index];
@@ -135,7 +157,10 @@
       window.audio?.fadeMusicTo(0, 1000);
 
       this.selectedChoice = index;
-      this.pendingReveal = { at: performance.now() + 1000 }; // suspense; reveal after plunger
+
+      // suspense; reveal after plunger + biased delay
+      const delay = 1000 + this.computeRevealDelay();
+      this.pendingReveal = { at: performance.now() + delay };
       this.state = States.REVEAL;
     }
 
@@ -144,7 +169,6 @@
         case States.INTRO_ANIM: {
           const t = Math.min(1, (now - this.introStartAt) / this.introDurMs);
           this.introAnimT = t;
-          // When t hits 1: show balloon, play "Start!" cue, schedule prompt window
           if(t >= 1){
             this.showRitchie = true;
             this.state = States.START_PROMPT;
@@ -171,15 +195,17 @@
             if(c) c.taken = true;
 
             if(armed){
-              // Real button: countdown + explosion, hide balloon immediately
+              // Real button: play countdown. Sequence:
+              // start sound, wait 0.5s, then 3, 2, 1 at 0.5s each → explosion
               window.audio?.playSfx("countdown");
-              this.showRitchie = false;
-              this.explodingUntil = now + 1200; // show GIF ~1.2s
-              this.state = States.EXPLODING;
+              this.countdownStartAt = now;
+              this.countdownValue = null; // shown after first tick
+              this.nextTickAt = now + 500; // first tick in 0.5s
+              this.state = States.COUNTDOWN;
             }else{
-              // DUD: keep Ritchie, show "Dud!" for ~1s, then resume
+              // Dud: keep Ritchie, play dud, show “Dud!” for ~1s, then resume
               window.audio?.playSfx("dud");
-              this.showDudUntil = now + 1000;       // <-- NEW
+              this.showDudUntil = now + 1000;
               this.state = States.SAFE_HOLD;
               this.pendingReveal = { at: now + 1000 }; // 1s breathing room
             }
@@ -196,6 +222,26 @@
           }
           break;
 
+        case States.COUNTDOWN:
+          if(now >= this.nextTickAt){
+            if(this.countdownValue === null){
+              this.countdownValue = 3;
+              this.nextTickAt = now + 500;
+            }else if(this.countdownValue === 3){
+              this.countdownValue = 2;
+              this.nextTickAt = now + 500;
+            }else if(this.countdownValue === 2){
+              this.countdownValue = 1;
+              this.nextTickAt = now + 500;
+            }else{
+              // After showing "1" for 0.5s → EXPLODE
+              this.showRitchie = false;             // hide balloon immediately
+              this.explodingUntil = now + 1200;     // show GIF ~1.2s
+              this.state = States.EXPLODING;
+            }
+          }
+          break;
+
         case States.EXPLODING:
           if(now >= this.explodingUntil){
             // After explosion gif, eliminate and speed next drop
@@ -205,8 +251,9 @@
             if(this.hud.remainingPlayers <= 1){
               this.winner = this.players.find(p=>p.alive) || null;
               window.audio?.playSfx("fanfare");
+              // Show winner ~5s, then return to setup
+              this.fadeBlackUntil = now + 5000;
               this.state = States.GAME_OVER;
-              this.fadeBlackUntil = now + 5000; // show "Winner!" ~5s before fade
             }else{
               // Next round: faster drop-in (2x speed)
               this.nextIntroDurMs = 1500;
@@ -220,19 +267,12 @@
           break;
 
         case States.GAME_OVER:
-          // Wait 5s showing "Winner!", then fade to black and reset
           if(now >= this.fadeBlackUntil){
             // Back to setup (player select), no BGM restart here
             this.players = [];
             this.state = States.SETUP;
           }
           break;
-
-        case States.NEXT_ROUND:
-          // (unused path now; we transition via INTRO_ANIM for each new round)
-          break;
-
-        // TITLE/SETUP/PLAYING handled externally for UI, no timers here
       }
     }
   }
