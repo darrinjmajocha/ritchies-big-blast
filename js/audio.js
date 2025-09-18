@@ -51,7 +51,6 @@
       }
     }
 
-    /** Play short sfx by name using WebAudio buffer if present, else HTMLAudio one-shots */
     playSfx(name){
       if(!this.enabled) return;
       const path = window.ASSET_PATHS.SFX_PATHS[name];
@@ -82,7 +81,13 @@
         }
         await this.musicEl.play();
       }catch(e){
-        console.warn("Music play failed (autoplay?), show enable button.", e);
+        // IMPORTANT: if autoplay blocks, discard the element so a later retry works.
+        console.warn("Music play failed (likely autoplay). Will show enable button and retry after user gesture.", e);
+        if (this.musicEl) {
+          try { this.musicEl.pause(); } catch(_) {}
+          this.musicEl.src = "";
+        }
+        this.musicEl = null;
         const btn = document.getElementById("enableSoundBtn");
         if(btn) btn.classList.remove("hidden");
       }
@@ -100,7 +105,7 @@
 
     stopMusic(){
       if(this.musicEl){
-        this.musicEl.pause();
+        try { this.musicEl.pause(); } catch(_){}
         this.musicEl.currentTime = 0;
         this.musicEl.src = "";
         this.musicEl = null;
@@ -117,7 +122,6 @@
       }
     }
 
-    /** Smooth volume change */
     fadeMusicTo(target, ms){
       target = Math.max(0, Math.min(1, target));
       if(this.preferred==="webaudio" && this.musicGain && this.ctx){
