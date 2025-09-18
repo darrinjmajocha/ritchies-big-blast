@@ -146,6 +146,10 @@
         renderer.drawReveal(game);
         break;
 
+      case GameStates.SAFE_HOLD:            // NEW: keep Ritchie visible & show “Dud!”
+        renderer.drawPlaying(game);
+        break;
+
       case GameStates.COUNTDOWN:
         renderer.drawPlaying(game); // draw countdown overlay inside renderer
         break;
@@ -179,7 +183,7 @@
         });
       }
     } else {
-      // hide choice buttons during intro/reveal/countdown/explosion/overlays/etc.
+      // hide choice buttons during intro/reveal/safe_hold/countdown/explosion/overlays/etc.
       if(ui.rows["choices"]) ui.clear();
       if(game.state===GameStates.GAME_OVER && !ui.rows["actions"]){
         buildGameOverUI();
