@@ -85,11 +85,12 @@
       const startY = -150;
       const endY = 280;
       const y = startY + (endY - startY) * easeOutCubic(t);
-      this.drawRitchie(CANVAS_BASE_W/2, y, 200); // bigger
+      this.drawRitchie(CANVAS_BASE_W/2, y, 160);
+
       g.fillStyle = "#dbe4ff";
       g.font = FONTS.small;
       g.textAlign = "center";
-      g.fillText("Get ready…", CANVAS_BASE_W/2, y + 140);
+      g.fillText("Get ready…", CANVAS_BASE_W/2, y + 130);
     }
 
     drawStartPrompt(game, now){
@@ -116,7 +117,21 @@
 
       // Only draw Ritchie when allowed
       if(game.showRitchie){
-        this.drawRitchie(CANVAS_BASE_W/2, 260, 200); // bigger
+        // Base Ritchie position
+        const r = 150;
+        const rx = CANVAS_BASE_W/2;
+        const ry = 260;
+        this.drawRitchie(rx, ry, r);
+
+        // If we are in the dud pause window, draw "Dud!" below Ritchie
+        if(game.showDudUntil && performance.now() < game.showDudUntil){
+          g.save();
+          g.textAlign = "center";
+          g.font = FONTS.big;
+          g.fillStyle = "#ffffff";
+          g.fillText("Dud!", rx, ry + r*0.9); // just under the balloon
+          g.restore();
+        }
       }
 
       // HUD
@@ -127,26 +142,6 @@
       g.fillText(`Current: ${cp?cp.name:"—"}`, 24, 34);
       g.fillText(`Remaining Players: ${game.hud.remainingPlayers}`, 24, 60);
       g.fillText(`Choices this round: ${game.hud.remainingChoices}`, 24, 86);
-
-      // DUD text (if active)
-      if(game.showDudUntil && performance.now() < game.showDudUntil){
-        g.save();
-        g.textAlign = "center";
-        g.font = FONTS.big;
-        g.fillStyle = "#ffffff";
-        g.fillText("Dud!", CANVAS_BASE_W/2, 150);
-        g.restore();
-      }
-
-      // COUNTDOWN overlay (if active)
-      if(game.state === window.GameStates.COUNTDOWN && game.countdownValue){
-        g.save();
-        g.textAlign = "center";
-        g.font = FONTS.big;
-        g.fillStyle = "#ffffff";
-        g.fillText(String(game.countdownValue), CANVAS_BASE_W/2, 150);
-        g.restore();
-      }
     }
 
     drawReveal(game){
@@ -158,84 +153,11 @@
       const img = this.assets.images.explosion;
       const g = this.ctx;
       if(img){
-        const w = 500, h = 380;
+        const w = 420, h = 320;
         g.drawImage(img, (CANVAS_BASE_W - w)/2, (CANVAS_BASE_H - h)/2, w, h);
       } else {
         // simple flash fallback
         g.save();
         g.fillStyle = "#ffecd1";
         g.globalAlpha = 0.8;
-        g.fillRect(0,0,CANVAS_BASE_W,CANVAS_BASE_H);
-        g.restore();
-      }
-    }
-
-    drawGameOver(game){
-      const g = this.ctx;
-      g.textAlign = "center";
-      g.font = FONTS.big;
-      g.fillStyle = "#fff";
-      g.fillText(game.winner ? `${game.winner.name} Wins!` : "Game Over", CANVAS_BASE_W/2, 180);
-    }
-
-    // --- SPRITES ---
-
-    drawRitchie(x, y, r){
-      const g = this.ctx;
-      if(this.assets.images.ritchie){
-        const img = this.assets.images.ritchie;
-        const w = r*1.6, h = r*1.6;
-        g.drawImage(img, x-w/2, y-h/2, w, h);
-      }else{
-        // simple placeholder balloon
-        g.fillStyle = "#ff7a59";
-        g.beginPath();
-        g.arc(x, y, r/2, 0, Math.PI*2);
-        g.fill();
-        // eyes
-        g.fillStyle = "#fff";
-        g.beginPath(); g.arc(x-20, y-5, 8, 0, Math.PI*2); g.fill();
-        g.beginPath(); g.arc(x+20, y-5, 8, 0, Math.PI*2); g.fill();
-        g.fillStyle = "#0b1020";
-        g.beginPath(); g.arc(x-20, y-5, 4, 0, Math.PI*2); g.fill();
-        g.beginPath(); g.arc(x+20, y-5, 4, 0, Math.PI*2); g.fill();
-        // string
-        g.strokeStyle = "#ffc9b9";
-        g.lineWidth = 3;
-        g.beginPath();
-        g.moveTo(x, y+r/2);
-        g.lineTo(x, y+r/2+40);
-        g.stroke();
-      }
-    }
-  }
-
-  class UILayer {
-    constructor(root){
-      this.root = root;
-      this.root.innerHTML = "";
-      this.rows = {};
-    }
-    clear(){ this.root.innerHTML=""; this.rows={}; }
-    row(id){
-      if(!this.rows[id]){
-        const div = document.createElement("div");
-        div.className = "ui-row";
-        this.root.appendChild(div);
-        this.rows[id] = div;
-      }
-      return this.rows[id];
-    }
-    button(text, cls, onClick, ariaLabel){
-      const b = document.createElement("button");
-      b.className = `ui-btn ${cls||""}`.trim();
-      b.textContent = text;
-      b.setAttribute("aria-label", ariaLabel || text);
-      b.addEventListener("click", onClick);
-      return b;
-    }
-  }
-
-  window.Renderer = Renderer;
-  window.UILayer = UILayer;
-})();
+        g.fi
