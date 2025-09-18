@@ -1,36 +1,9 @@
 <!--
 README — Ritchie’s Big Blast (Web: HTML/CSS/JS)
-
-How to run locally
-1) Ensure you have a simple local server to avoid CORS with audio (examples):
-   - Python 3: `python -m http.server 8000`
-   - Node (http-server): `npx http-server -p 8000`
-2) From a terminal, `cd` into this project folder, start the server, then open:
-   http://localhost:8000/
-
-Where to put assets
-- Put your actual media files at the following relative paths (already referenced in code):
-  /assets/img/ritchie.png
-  /assets/img/button.png
-  /assets/img/background.png
-  /assets/sfx/arming.wav
-  /assets/sfx/click.wav
-  /assets/sfx/boom.wav
-  /assets/sfx/win.wav
-  /assets/music/bgm.ogg
-- Placeholders are referenced by path only; if files are missing, the game draws simple shapes/text and mutes gracefully.
-
-Autoplay note (user click required for audio)
-- Browsers block autoplayed audio. The game initializes audio on the first user click (press “Play”). 
-  If audio still can’t start, a small “Enable Sound” button will appear to retry.
-
-GitHub Pages
-- Commit and push this whole folder to a GitHub repo (public).
-- In the repo settings, enable GitHub Pages (Deploy from branch, usually `/root`).
-- Your game will be served at the Pages URL. Because assets are relative paths, it should just work.
-
+...
+Also add:
+  /assets/music/menu.ogg   (menu theme; loops on Title/Setup and after a win/reset)
 -->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -42,19 +15,10 @@ GitHub Pages
 </head>
 <body>
   <div id="app">
-    <!-- Single canvas for all rendering -->
     <canvas id="gameCanvas" aria-label="Ritchie's Big Blast game canvas" role="img"></canvas>
-
-    <!-- Accessible, keyboard-focusable controls live in this layer -->
     <div id="uiLayer" aria-live="polite"></div>
-
-    <!-- Sound enable retry button (hidden unless needed) -->
     <button id="enableSoundBtn" class="hidden" aria-label="Enable Sound">Enable Sound</button>
-
-    <!-- NEW: Always-available Reset button (top-right) -->
     <button id="resetBtn" aria-label="Reset to player selection">Reset</button>
-
-    <!-- Loading overlay -->
     <div id="loadingOverlay" class="overlay">
       <div class="loader">
         <div class="bar"></div>
@@ -63,35 +27,20 @@ GitHub Pages
     </div>
   </div>
 
-  <!-- Constants first, then modules -->
   <script>
     window.CONSTS = {
       CANVAS_BASE_W: 1280,
       CANVAS_BASE_H: 720,
-      COLORS: {
-        bg: "#0b1020",
-        ui: "#f5f6fa",
-        primary: "#ff7a59",
-        safe: "#3ddc84",
-        danger: "#ff3860",
-        accent: "#3f8cff"
-      },
+      COLORS: { bg:"#0b1020", ui:"#f5f6fa", primary:"#ff7a59", safe:"#3ddc84", danger:"#ff3860", accent:"#3f8cff" },
       FONTS: {
         ui: "600 24px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, sans-serif",
-        big: "800 72px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, sans-serif",
-        med: "700 32px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, sans-serif",
-        small: "500 18px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, sans-serif"
+        big:"800 72px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, sans-serif",
+        med:"700 32px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, sans-serif",
+        small:"500 18px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, sans-serif"
       },
-      AUDIO: {
-        musicVolume: 0.5,
-        sfxVolume: 0.9,
-        duckTo: 0.18,
-        duckFadeMs: 150,
-        duckHoldMs: 300
-      }
+      AUDIO: { musicVolume:0.5, sfxVolume:0.9, duckTo:0.18, duckFadeMs:150, duckHoldMs:300 }
     };
   </script>
-
   <script src="js/assets.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/game.js"></script>
