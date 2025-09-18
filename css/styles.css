@@ -29,7 +29,21 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);}
 
 .hidden{display:none !important}
 
-#enableSoundBtn{position:absolute;top:12px;right:12px;z-index:10}
+#enableSoundBtn,
+#resetBtn{
+  position:absolute;
+  top:12px;
+  z-index:10;
+}
+#enableSoundBtn{ right:12px; }
+#resetBtn{
+  right:120px;
+  appearance:none;border:0;border-radius:10px;padding:10px 14px;
+  background:#2a344b;color:#fff;font:600 14px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, sans-serif;
+  cursor:pointer;outline:2px solid transparent;outline-offset:2px;
+}
+#resetBtn:hover{ transform:translateY(-1px); }
+#resetBtn:focus-visible{ outline-color:var(--accent); }
 
 .overlay{position:absolute;inset:0;background:#0b1020;display:grid;place-items:center}
 .loader{width:min(420px,80vw);}
