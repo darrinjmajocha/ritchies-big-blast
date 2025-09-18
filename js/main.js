@@ -8,7 +8,7 @@
   const loadingOverlay = document.getElementById("loadingOverlay");
   const loadingLabel = document.getElementById("loadingLabel");
   const enableBtn = document.getElementById("enableSoundBtn");
-  const resetBtn = document.getElementById("resetBtn");   // NEW
+  const resetBtn = document.getElementById("resetBtn");
 
   const assets = new AssetManager((pct)=>{ loadingLabel.textContent = `Loading… ${pct}%`; });
   // Prepare audio, but don't start music until after START_PROMPT
@@ -30,11 +30,16 @@
   // --- State controls ---
   function gotoTitle(){
     game.reset();
+    // Menu track
+    window.audio?.stopMusic();
+    window.audio?.playMenuMusic(true);
     buildTitleUI();
   }
   function gotoSetup(){
     game.state = GameStates.SETUP;
     game.players = [];
+    // Keep menu music on in setup
+    if(!window.audio?.musicEl) window.audio?.playMenuMusic(true);
     buildSetupUI(4); // default 4 players
   }
 
@@ -42,7 +47,7 @@
     ui.clear();
     const row = ui.row("main");
     const play = ui.button("Play", "primary", async ()=>{
-      // init/resume audio context only (no BGM yet)
+      // init/resume audio context only; keep menu music until gameplay starts
       await window.audio.resume();
       gotoSetup();
     }, "Start the game");
@@ -53,10 +58,16 @@
     ui.clear();
     let count = Math.min(15, Math.max(2, startCount));
 
+    // Controls row
     const controls = ui.row("setup");
     const minus = ui.button("−", "", ()=>{ count=Math.max(2,count-1); }, "Decrease player count");
     const plus  = ui.button("+", "", ()=>{ count=Math.min(15,count+1); }, "Increase player count");
-    const start = ui.button("Start", "primary", ()=>{ game.setPlayers(count); }, "Confirm player count and start");
+    const start = ui.button("Start", "primary", ()=>{
+      // switch from menu music to game music when gameplay actually begins (handled in game)
+      game.setPlayers(count);
+      // Switch off menu music now to avoid overlap; game music starts at START_PROMPT->PLAYING
+      window.audio?.stopMusic();
+    }, "Confirm player count and start");
     controls.appendChild(minus);
     controls.appendChild(plus);
     controls.appendChild(start);
@@ -66,7 +77,10 @@
       if(game.state!==GameStates.SETUP) return;
       if(e.key==="+") { count=Math.min(15,count+1); }
       if(e.key==="-") { count=Math.max(2,count-1); }
-      if(e.key==="Enter"){ game.setPlayers(count); }
+      if(e.key==="Enter"){ 
+        game.setPlayers(count);
+        window.audio?.stopMusic();
+      }
     };
 
     // Renderer reads this to draw the current value
@@ -75,20 +89,60 @@
 
   function buildChoiceButtons(){
     ui.clear();
-    const row = ui.row("choices");
-    game.roundChoices.forEach((c, idx)=>{
-      const b = ui.button(c.label, "", ()=>{ game.selectChoice(idx); }, `Choose number ${c.label}`);
+
+    // Two-row layout; when only one row needed, we use the BOTTOM row
+    const topRow = ui.row("choicesTop");
+    const bottomRow = ui.row("choicesBottom");
+    topRow.innerHTML = "";
+    bottomRow.innerHTML = "";
+
+    const n = game.roundChoices.length;
+    const topCount = Math.floor(n/2);
+    const bottomCount = n - topCount;
+
+    // If only one row, render all in bottom to keep lower composition
+    const putAllInBottom = (n <= 5);
+
+    function makeBtn(c, idx){
+      const b = ui.button(c.label, "choice", ()=>{ game.selectChoice(idx); }, `Choose number ${c.label}`);
       b.disabled = c.taken || game.state!==GameStates.PLAYING;
       b.classList.toggle("safe", c.taken && idx!==game.armedIndex);
       b.classList.toggle("danger", c.taken && idx===game.armedIndex);
-      row.appendChild(b);
+      return b;
+    }
+
+    if(putAllInBottom){
+      game.roundChoices.forEach((c, idx)=> bottomRow.appendChild(makeBtn(c, idx)));
+    } else {
+      game.roundChoices.slice(0, topCount).forEach((c, i)=> topRow.appendChild(makeBtn(c, i)));
+      game.roundChoices.slice(topCount).forEach((c, j)=> bottomRow.appendChild(makeBtn(c, topCount + j)));
+    }
+  }
+
+  function updateChoiceButtons(){
+    const topRow = ui.rows["choicesTop"];
+    const bottomRow = ui.rows["choicesBottom"];
+    if(!topRow || !bottomRow) return;
+
+    const btns = [...topRow.children, ...bottomRow.children];
+    btns.forEach((b, idx)=>{
+      const c = game.roundChoices[idx];
+      if(!c) return;
+      b.disabled = c.taken || game.state!==GameStates.PLAYING;
+      b.classList.toggle("safe", c.taken && idx!==game.armedIndex);
+      b.classList.toggle("danger", c.taken && idx===game.armedIndex);
     });
   }
 
   function buildGameOverUI(){
     ui.clear();
     const row = ui.row("actions");
-    const again = ui.button("Play Again", "primary", ()=>gotoTitle(), "Return to title");
+    const again = ui.button("Play Again", "primary", ()=>{
+      // stop game music, start menu loop
+      window.audio?.stopMusic();
+      window.audio?.playMenuMusic(true);
+      gotoSetup();
+    }, "Return to player selection");
     row.appendChild(again);
   }
 
@@ -113,13 +167,12 @@
   enableBtn.addEventListener("click", async ()=>{
     enableBtn.classList.add("hidden");
     await window.audio.resume();
-    // still do NOT force-play music here; game flow will start it
   });
 
-  // NEW: Reset button (always available)
+  // Reset → Setup + menu music
   resetBtn.addEventListener("click", ()=>{
-    // Stop music softly and go back to setup
-    window.audio?.fadeMusicTo(window.CONSTS.AUDIO.musicVolume, 1); // snap back to default
+    window.audio?.stopMusic();
+    window.audio?.playMenuMusic(true);
     gotoSetup();
   });
 
@@ -160,16 +213,12 @@
 
       case GameStates.COUNTDOWN:
         renderer.drawPlaying(game);
-        renderer.drawCountdown(game);    // NEW: show 3/2/1
+        renderer.drawCountdown(game);
         break;
 
       case GameStates.EXPLODING:
         renderer.drawPlaying(game);
         renderer.drawExplosion();
-        break;
-
-      case GameStates.ELIMINATE:
-        renderer.drawPlaying(game);
         break;
 
       case GameStates.GAME_OVER:
@@ -181,20 +230,18 @@
 
     // UI buttons exist ONLY during PLAYING
     if(game.state===GameStates.PLAYING){
-      if(!ui.rows["choices"] || ui.rows["choices"].children.length !== game.roundChoices.length){
+      if(!ui.rows["choicesTop"] || !ui.rows["choicesBottom"]){
         buildChoiceButtons();
       }else{
-        [...ui.rows["choices"].children].forEach((b, idx)=>{
-          const c = game.roundChoices[idx];
-          b.disabled = c.taken || game.state!==GameStates.PLAYING;
-          b.classList.toggle("safe", c.taken && idx!==game.armedIndex);
-          b.classList.toggle("danger", c.taken && idx===game.armedIndex);
-        });
+        updateChoiceButtons();
       }
     } else {
-      // hide choice buttons during intro/reveal/safe_hold/countdown/explosion/overlays/etc.
-      if(ui.rows["choices"]) ui.clear();
+      // Hide choice buttons during non-playing states
+      if(ui.rows["choicesTop"] || ui.rows["choicesBottom"]) ui.clear();
       if(game.state===GameStates.GAME_OVER && !ui.rows["actions"]){
+        // switch back to menu music on victory screen (before setup)
+        window.audio?.stopMusic();
+        window.audio?.playMenuMusic(true);
         buildGameOverUI();
       }
     }
@@ -205,7 +252,7 @@
     requestAnimationFrame(loop);
   }
 
-  // Start
+  // Start at Title with menu music
   gotoTitle();
   requestAnimationFrame(loop);
 
