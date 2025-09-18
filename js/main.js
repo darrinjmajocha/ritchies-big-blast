@@ -146,6 +146,10 @@
         renderer.drawReveal(game);
         break;
 
+      case GameStates.COUNTDOWN:
+        renderer.drawPlaying(game); // draw countdown overlay inside renderer
+        break;
+
       case GameStates.EXPLODING:
         renderer.drawPlaying(game);
         renderer.drawExplosion();
@@ -175,7 +179,7 @@
         });
       }
     } else {
-      // hide choice buttons during intro/reveal/explosion/overlays/etc.
+      // hide choice buttons during intro/reveal/countdown/explosion/overlays/etc.
       if(ui.rows["choices"]) ui.clear();
       if(game.state===GameStates.GAME_OVER && !ui.rows["actions"]){
         buildGameOverUI();
