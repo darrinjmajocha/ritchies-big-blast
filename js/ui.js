@@ -5,6 +5,11 @@
 (function(){
   const { CANVAS_BASE_W, CANVAS_BASE_H, COLORS, FONTS } = window.CONSTS;
 
+  // Single source of truth for Ritchie size + positions
+  const RITCHIE_R = 240;       // overall "size" control (bigger balloon)
+  const RITCHIE_PLAY_X = CANVAS_BASE_W / 2;
+  const RITCHIE_PLAY_Y = 330;  // keep comfortably on screen with bigger size
+
   function easeOutCubic(t){ return 1 - Math.pow(1-t,3); }
   function easeInOutSine(t){ return -(Math.cos(Math.PI*t)-1)/2; }
 
@@ -82,15 +87,15 @@
     drawIntro(t){
       // Ritchie balloon floats down with easing
       const g = this.ctx;
-      const startY = -150;
-      const endY = 280;
+      const startY = -200;
+      const endY = RITCHIE_PLAY_Y;
       const y = startY + (endY - startY) * easeOutCubic(t);
-      this.drawRitchie(CANVAS_BASE_W/2, y, 160);
+      this.drawRitchie(CANVAS_BASE_W/2, y, RITCHIE_R);
 
       g.fillStyle = "#dbe4ff";
       g.font = FONTS.small;
       g.textAlign = "center";
-      g.fillText("Get ready…", CANVAS_BASE_W/2, y + 130);
+      g.fillText("Get ready…", CANVAS_BASE_W/2, y + (RITCHIE_R*0.55));
     }
 
     drawStartPrompt(game, now){
@@ -117,10 +122,10 @@
 
       // Only draw Ritchie when allowed
       if(game.showRitchie){
-        // Base Ritchie position
-        const r = 150;
-        const rx = CANVAS_BASE_W/2;
-        const ry = 260;
+        // Base Ritchie position (consistent across screens)
+        const rx = RITCHIE_PLAY_X;
+        const ry = RITCHIE_PLAY_Y;
+        const r = RITCHIE_R;
         this.drawRitchie(rx, ry, r);
 
         // If we are in the dud pause window, draw "Dud!" below Ritchie
@@ -129,7 +134,7 @@
           g.textAlign = "center";
           g.font = FONTS.big;
           g.fillStyle = "#ffffff";
-          g.fillText("Dud!", rx, ry + r*0.9); // just under the balloon
+          g.fillText("Dud!", rx, ry + r*0.65);
           g.restore();
         }
       }
@@ -149,11 +154,23 @@
       this.drawPlaying(game);
     }
 
+    drawCountdown(game){
+      // Big centered 3,2,1 during COUNTDOWN
+      if(game.countdownValue === null) return;
+      const g = this.ctx;
+      g.save();
+      g.textAlign = "center";
+      g.font = FONTS.big;
+      g.fillStyle = "#ffffff";
+      g.fillText(String(game.countdownValue), CANVAS_BASE_W/2, CANVAS_BASE_H/2);
+      g.restore();
+    }
+
     drawExplosion(){
       const img = this.assets.images.explosion;
       const g = this.ctx;
       if(img){
-        const w = 420, h = 320;
+        const w = 520, h = 380;
         g.drawImage(img, (CANVAS_BASE_W - w)/2, (CANVAS_BASE_H - h)/2, w, h);
       } else {
         // simple flash fallback
@@ -189,17 +206,17 @@
         g.fill();
         // eyes
         g.fillStyle = "#fff";
-        g.beginPath(); g.arc(x-20, y-5, 8, 0, Math.PI*2); g.fill();
-        g.beginPath(); g.arc(x+20, y-5, 8, 0, Math.PI*2); g.fill();
+        g.beginPath(); g.arc(x-28, y-10, 10, 0, Math.PI*2); g.fill();
+        g.beginPath(); g.arc(x+28, y-10, 10, 0, Math.PI*2); g.fill();
         g.fillStyle = "#0b1020";
-        g.beginPath(); g.arc(x-20, y-5, 4, 0, Math.PI*2); g.fill();
-        g.beginPath(); g.arc(x+20, y-5, 4, 0, Math.PI*2); g.fill();
+        g.beginPath(); g.arc(x-28, y-10, 5, 0, Math.PI*2); g.fill();
+        g.beginPath(); g.arc(x+28, y-10, 5, 0, Math.PI*2); g.fill();
         // string
         g.strokeStyle = "#ffc9b9";
         g.lineWidth = 3;
         g.beginPath();
         g.moveTo(x, y+r/2);
-        g.lineTo(x, y+r/2+40);
+        g.lineTo(x, y+r/2+60);
         g.stroke();
       }
     }
