@@ -184,7 +184,7 @@
       if(!ui.rows["choices"] || ui.rows["choices"].children.length !== game.roundChoices.length){
         buildChoiceButtons();
       }else{
-        [...ui.rows["choices"]..children].forEach((b, idx)=>{
+        [...ui.rows["choices"].children].forEach((b, idx)=>{
           const c = game.roundChoices[idx];
           b.disabled = c.taken || game.state!==GameStates.PLAYING;
           b.classList.toggle("safe", c.taken && idx!==game.armedIndex);
