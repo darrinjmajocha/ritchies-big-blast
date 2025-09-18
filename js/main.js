@@ -8,6 +8,7 @@
   const loadingOverlay = document.getElementById("loadingOverlay");
   const loadingLabel = document.getElementById("loadingLabel");
   const enableBtn = document.getElementById("enableSoundBtn");
+  const resetBtn = document.getElementById("resetBtn");   // NEW
 
   const assets = new AssetManager((pct)=>{ loadingLabel.textContent = `Loading… ${pct}%`; });
   // Prepare audio, but don't start music until after START_PROMPT
@@ -115,6 +116,13 @@
     // still do NOT force-play music here; game flow will start it
   });
 
+  // NEW: Reset button (always available)
+  resetBtn.addEventListener("click", ()=>{
+    // Stop music softly and go back to setup
+    window.audio?.fadeMusicTo(window.CONSTS.AUDIO.musicVolume, 1); // snap back to default
+    gotoSetup();
+  });
+
   // --- Main loop ---
   function loop(){
     const now = performance.now();
@@ -146,12 +154,13 @@
         renderer.drawReveal(game);
         break;
 
-      case GameStates.SAFE_HOLD:            // NEW: keep Ritchie visible & show “Dud!”
+      case GameStates.SAFE_HOLD:
         renderer.drawPlaying(game);
         break;
 
       case GameStates.COUNTDOWN:
-        renderer.drawPlaying(game); // draw countdown overlay inside renderer
+        renderer.drawPlaying(game);
+        renderer.drawCountdown(game);    // NEW: show 3/2/1
         break;
 
       case GameStates.EXPLODING:
@@ -175,7 +184,7 @@
       if(!ui.rows["choices"] || ui.rows["choices"].children.length !== game.roundChoices.length){
         buildChoiceButtons();
       }else{
-        [...ui.rows["choices"].children].forEach((b, idx)=>{
+        [...ui.rows["choices"]..children].forEach((b, idx)=>{
           const c = game.roundChoices[idx];
           b.disabled = c.taken || game.state!==GameStates.PLAYING;
           b.classList.toggle("safe", c.taken && idx!==game.armedIndex);
