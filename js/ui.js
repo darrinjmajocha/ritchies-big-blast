@@ -85,11 +85,12 @@
       const startY = -150;
       const endY = 280;
       const y = startY + (endY - startY) * easeOutCubic(t);
-      this.drawRitchie(CANVAS_BASE_W/2, y, 200); // bigger
+      this.drawRitchie(CANVAS_BASE_W/2, y, 160);
+
       g.fillStyle = "#dbe4ff";
       g.font = FONTS.small;
       g.textAlign = "center";
-      g.fillText("Get ready…", CANVAS_BASE_W/2, y + 140);
+      g.fillText("Get ready…", CANVAS_BASE_W/2, y + 130);
     }
 
     drawStartPrompt(game, now){
@@ -116,7 +117,21 @@
 
       // Only draw Ritchie when allowed
       if(game.showRitchie){
-        this.drawRitchie(CANVAS_BASE_W/2, 260, 200); // bigger
+        // Base Ritchie position
+        const r = 150;
+        const rx = CANVAS_BASE_W/2;
+        const ry = 260;
+        this.drawRitchie(rx, ry, r);
+
+        // If we are in the dud pause window, draw "Dud!" below Ritchie
+        if(game.showDudUntil && performance.now() < game.showDudUntil){
+          g.save();
+          g.textAlign = "center";
+          g.font = FONTS.big;
+          g.fillStyle = "#ffffff";
+          g.fillText("Dud!", rx, ry + r*0.9); // just under the balloon
+          g.restore();
+        }
       }
 
       // HUD
@@ -127,26 +142,6 @@
       g.fillText(`Current: ${cp?cp.name:"—"}`, 24, 34);
       g.fillText(`Remaining Players: ${game.hud.remainingPlayers}`, 24, 60);
       g.fillText(`Choices this round: ${game.hud.remainingChoices}`, 24, 86);
-
-      // DUD text (if active)
-      if(game.showDudUntil && performance.now() < game.showDudUntil){
-        g.save();
-        g.textAlign = "center";
-        g.font = FONTS.big;
-        g.fillStyle = "#ffffff";
-        g.fillText("Dud!", CANVAS_BASE_W/2, 150);
-        g.restore();
-      }
-
-      // COUNTDOWN overlay (if active)
-      if(game.state === window.GameStates.COUNTDOWN && game.countdownValue){
-        g.save();
-        g.textAlign = "center";
-        g.font = FONTS.big;
-        g.fillStyle = "#ffffff";
-        g.fillText(String(game.countdownValue), CANVAS_BASE_W/2, 150);
-        g.restore();
-      }
     }
 
     drawReveal(game){
@@ -158,7 +153,7 @@
       const img = this.assets.images.explosion;
       const g = this.ctx;
       if(img){
-        const w = 500, h = 380;
+        const w = 420, h = 320;
         g.drawImage(img, (CANVAS_BASE_W - w)/2, (CANVAS_BASE_H - h)/2, w, h);
       } else {
         // simple flash fallback
