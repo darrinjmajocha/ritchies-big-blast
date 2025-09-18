@@ -8,9 +8,7 @@
     REVEAL: "REVEAL",            // suspense period after plunger
     SAFE_HOLD: "SAFE_HOLD",      // 1s pause after dud + "Dud!" text
     COUNTDOWN: "COUNTDOWN",      // 1.0s beat, then 3→2→1 at 1.0s each
-    EXPLODING: "EXPLODING",      // play explosion gif once
-    ELIMINATE: "ELIMINATE",
-    NEXT_ROUND: "NEXT_ROUND",
+    EXPLODING: "EXPLODING",      // play explosion gif once + white flash
     GAME_OVER: "GAME_OVER",
   });
 
@@ -46,7 +44,7 @@
       this.showRitchie = false;    // hidden until after player select & drop
       this.startPromptUntil = 0;   // when to end the "Start!" text
       this.fadeBlackUntil = 0;     // winner hold
-      this.explodingUntil = 0;     // explosion gif window
+      this.explodingUntil = 0;     // explosion gif/flash window
 
       // Dud overlay
       this.showDudUntil = 0;
@@ -114,7 +112,6 @@
       this.roundChoices = Array.from({length: choices}, (_,i)=>({ idx:i, taken:false, label:`${i+1}` }));
       this.armedIndex = this.rng.pickInt(0, choices-1);
       this.hud.remainingChoices = choices;
-      // optional: arming cue
       window.audio?.playSfx("arming");
     }
 
@@ -137,13 +134,15 @@
       this.currentPlayerIdx = i;
     }
 
-    // Reveal delay increases (up to 5s) as fewer choices remain
+    // Reveal delay increases (up to 5s) — bias more if fewer than 6 players
     computeRevealDelay(){
       const total = this.roundChoices.length;
       const remaining = this.roundChoices.filter(c=>!c.taken).length;
+      const alivePlayers = this.players.filter(p=>p.alive).length;
+
       const p = 1 - (remaining-1)/(total-1 || 1); // 0 when many, →1 when few
-      const baseMin = 500;      // ms
-      const extraMax = 4500;    // up to 5s total
+      const baseMin = alivePlayers < 6 ? 800 : 500;   // slightly higher base for small groups
+      const extraMax = alivePlayers < 6 ? 4800 : 4500;
       const r = this.rng.next();
       const weight = p*p;       // stronger near end
       const delay = baseMin + (extraMax * weight * (0.5 + 0.5*r));
@@ -164,24 +163,27 @@
       // suspense; reveal after plunger + biased delay
       const delay = 1000 + this.computeRevealDelay();
       this.pendingReveal = { at: performance.now() + delay };
-      this.state = States.REVEAL;
+      this.state = "REVEAL";
     }
 
     update(now){
       switch(this.state){
-        case States.INTRO_ANIM: {
+        case "INTRO_ANIM": {
           const t = Math.min(1, (now - this.introStartAt) / this.introDurMs);
           this.introAnimT = t;
           if(t >= 1){
             this.showRitchie = true;
 
             if(this.skipStartPromptOnce){
-              // Fast-drop finish: go straight back to PLAYING (no Start! prompt, no new round)
+              // Fast-drop finish after re-arming all-duds reset:
               this.skipStartPromptOnce = false;
-              this.state = States.PLAYING;
+              // Ensure game music is back
+              if(!window.audio?.musicEl) { window.audio?.playGameMusic(true); }
+              window.audio?.fadeMusicTo(window.CONSTS.AUDIO.musicVolume, 600);
+              this.state = "PLAYING";
             } else {
               // Normal first drop: show the Start! prompt then begin the first round
-              this.state = States.START_PROMPT;
+              this.state = "START_PROMPT";
               this.startPromptUntil = now + 3000; // fade text over 3s
               window.audio?.playSfx("start");
               this.startRound();
@@ -189,16 +191,16 @@
           }
         } break;
 
-        case States.START_PROMPT:
+        case "START_PROMPT":
           if(now >= this.startPromptUntil){
-            // Begin actual play and start BGM
+            // Begin actual play and start BGM (menu music stops in main loop control)
             window.audio?.fadeMusicTo(window.CONSTS.AUDIO.musicVolume, 600);
-            if(!window.audio?.musicEl){ window.audio?.playMusic(true); }
-            this.state = States.PLAYING;
+            if(!window.audio?.musicEl){ window.audio?.playGameMusic(true); }
+            this.state = "PLAYING";
           }
           break;
 
-        case States.REVEAL:
+        case "REVEAL":
           if(this.pendingReveal && now >= this.pendingReveal.at){
             const armed = this.selectedChoice === this.armedIndex;
             const c = this.roundChoices[this.selectedChoice];
@@ -210,18 +212,18 @@
               this.countdownStartAt = now;
               this.countdownValue = null; // shown after first tick
               this.nextTickAt = now + 1000; // first tick in 1.0s
-              this.state = States.COUNTDOWN;
+              this.state = "COUNTDOWN";
             }else{
               // DUD: keep Ritchie, play dud, show “Dud!” for ~1s, then resume
               window.audio?.playSfx("dud");
               this.showDudUntil = now + 1000;
-              this.state = States.SAFE_HOLD;
+              this.state = "SAFE_HOLD";
               this.pendingReveal = { at: now + 1000 }; // 1s breathing room
             }
           }
           break;
 
-        case States.SAFE_HOLD:
+        case "SAFE_HOLD":
           if(this.pendingReveal && now >= this.pendingReveal.at){
             this.pendingReveal = null;
 
@@ -240,20 +242,21 @@
               this.introStartAt = now;
               this.introAnimT = 0;
               this.skipStartPromptOnce = true;
-              this.state = States.INTRO_ANIM;
+              this.state = "INTRO_ANIM";
               window.audio?.playSfx("priming");
-              // Don't advance player or resume music yet; the loop will animate the drop
+
+              // Make sure music comes back on the other side of the drop (handled at INTRO_ANIM completion)
               return;
             }
 
             // Normal dud flow: next player and fade music back
             this.nextPlayer();
             window.audio?.fadeMusicTo(1, 3000);
-            this.state = States.PLAYING;
+            this.state = "PLAYING";
           }
           break;
 
-        case States.COUNTDOWN:
+        case "COUNTDOWN":
           if(now >= this.nextTickAt){
             if(this.countdownValue === null){
               this.countdownValue = 3;
@@ -265,44 +268,41 @@
               this.countdownValue = 1;
               this.nextTickAt = now + 1000;
             }else{
-              // After showing "1" for 1.0s → EXPLODE
+              // After showing "1" for 1.0s → EXPLODE (white flash + gif)
               this.showRitchie = false;             // hide balloon immediately
-              this.explodingUntil = now + 1200;     // show GIF ~1.2s
-              this.state = States.EXPLODING;
+              this.explodingUntil = now + 2200;     // was ~1200; now +1s longer
+              this.state = "EXPLODING";
             }
           }
           break;
 
-        case States.EXPLODING:
+        case "EXPLODING":
           if(now >= this.explodingUntil){
-            // After explosion gif, eliminate and speed next drop
+            // After explosion, eliminate and start next round (fast drop)
             const cp = this.currentPlayer;
             if(cp){ cp.alive = false; this.hud.remainingPlayers = this.players.filter(p=>p.alive).length; }
             // Winner?
             if(this.hud.remainingPlayers <= 1){
               this.winner = this.players.find(p=>p.alive) || null;
               window.audio?.playSfx("fanfare");
-              // Show winner ~5s, then return to setup
+              // Show winner ~5s, then return handled in main (menu music there)
               this.fadeBlackUntil = now + 5000;
-              this.state = States.GAME_OVER;
+              this.state = "GAME_OVER";
             }else{
               // Next round: faster drop-in (2x speed)
               this.nextIntroDurMs = 1500;
               this.introDurMs = this.nextIntroDurMs;
               this.introStartAt = now;
               this.introAnimT = 0;
-              this.state = States.INTRO_ANIM;
+              this.state = "INTRO_ANIM";
               window.audio?.playSfx("priming");
+              // Music will already be playing; leave it alone here.
             }
           }
           break;
 
-        case States.GAME_OVER:
-          if(now >= this.fadeBlackUntil){
-            // Back to setup (player select), no BGM restart here
-            this.players = [];
-            this.state = States.SETUP;
-          }
+        case "GAME_OVER":
+          // Nothing here; main loop will route back to setup after fade window.
           break;
       }
     }
