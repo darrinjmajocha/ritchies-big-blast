@@ -1,9 +1,39 @@
 <!--
 README — Ritchie’s Big Blast (Web: HTML/CSS/JS)
-...
-Also add:
-  /assets/music/menu.ogg   (menu theme; loops on Title/Setup and after a win/reset)
+
+How to run locally
+1) Serve via a simple local server to avoid CORS with audio:
+   - Python: python -m http.server 8000
+   - Node:   npx http-server -p 8000
+2) Open http://localhost:8000/
+
+Assets
+- Put media at:
+  /assets/img/ritchie.png
+  /assets/img/button.png
+  /assets/img/background.png
+  /assets/img/explosion.gif
+  /assets/sfx/arming.wav
+  /assets/sfx/click.wav
+  /assets/sfx/boom.wav   (optional legacy)
+  /assets/sfx/win.wav    (optional legacy)
+  /assets/sfx/priming.ogg
+  /assets/sfx/start.ogg
+  /assets/sfx/dud.ogg
+  /assets/sfx/plunger.ogg
+  /assets/sfx/countdown.ogg
+  /assets/sfx/fanfare.ogg
+  /assets/music/bgm.ogg
+  /assets/music/menu.ogg
+
+Audio
+- First user click enables audio (browser policy). “Enable Sound” button appears if needed.
+
+GitHub Pages
+- Push this folder to your repo, enable Pages (Deploy from branch, root). Relative paths will work.
+
 -->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,10 +45,18 @@ Also add:
 </head>
 <body>
   <div id="app">
+    <!-- Canvas render target -->
     <canvas id="gameCanvas" aria-label="Ritchie's Big Blast game canvas" role="img"></canvas>
+
+    <!-- Accessible UI layer -->
     <div id="uiLayer" aria-live="polite"></div>
+
+    <!-- Top-right controls -->
     <button id="enableSoundBtn" class="hidden" aria-label="Enable Sound">Enable Sound</button>
     <button id="resetBtn" aria-label="Reset to player selection">Reset</button>
+    <button id="muteBtn" aria-label="Mute sound" aria-pressed="false">Mute</button>
+
+    <!-- Loader -->
     <div id="loadingOverlay" class="overlay">
       <div class="loader">
         <div class="bar"></div>
@@ -41,6 +79,7 @@ Also add:
       AUDIO: { musicVolume:0.5, sfxVolume:0.9, duckTo:0.18, duckFadeMs:150, duckHoldMs:300 }
     };
   </script>
+
   <script src="js/assets.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/game.js"></script>
