@@ -19,7 +19,7 @@
       this.musicGain = null;
       this.masterGain = null;
       this.musicSource = null;
-      this.musicEl = null;
+      this.musicEl = null; // HTMLAudio fallback
       this.enabled = false;
       this.preferred = "webaudio";
       this.musicVolume = (window.CONSTS?.AUDIO?.musicVolume) ?? 0.5;
@@ -43,7 +43,7 @@
         this.preferred = "webaudio";
       }catch(e){
         console.warn("WebAudio unavailable, will use HTMLAudio fallback.", e);
-        this.enabled = true;
+        this.enabled = true; // enabled but fallback will be used
         this.preferred = "htmlaudio";
       }
     }
@@ -67,7 +67,7 @@
 
     playSfx(name){
       if(!this.enabled) return;
-      if(this._muted) return;
+      if(this._muted) return; // silence SFX when muted
       const path = window.ASSET_PATHS.SFX_PATHS[name];
       if(this.preferred==="webaudio" && this.ctx && this.assets.sfx[name]){
         const src = this.ctx.createBufferSource();
@@ -98,6 +98,7 @@
         }
         await this.musicEl.play();
       }catch(e){
+        // IMPORTANT: if autoplay blocks, discard the element so a later retry works.
         console.warn("Music play failed (likely autoplay). Will show enable button and retry after user gesture.", e);
         if (this.musicEl) {
           try { this.musicEl.pause(); } catch(_) {}
@@ -139,7 +140,7 @@
     }
 
     fadeMusicTo(target, ms){
-      if(this._muted) return;
+      if(this._muted) return; // keep silent when muted
       target = Math.max(0, Math.min(1, target));
       if(this.preferred==="webaudio" && this.musicGain && this.ctx){
         const now = this.ctx.currentTime;
