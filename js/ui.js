@@ -5,10 +5,10 @@
 (function(){
   const { CANVAS_BASE_W, CANVAS_BASE_H, COLORS, FONTS } = window.CONSTS;
 
-  // Single source of truth for Ritchie size + positions
-  const RITCHIE_R = 240;       // base radius for balloon drawing
+  // Bigger, unified Ritchie size + placement
+  const RITCHIE_R = 300;              // was 240
   const RITCHIE_PLAY_X = CANVAS_BASE_W / 2;
-  const RITCHIE_PLAY_Y = 330;
+  const RITCHIE_PLAY_Y = 360;         // nudged down for larger size
 
   function easeOutCubic(t){ return 1 - Math.pow(1-t,3); }
   function easeInOutSine(t){ return -(Math.cos(Math.PI*t)-1)/2; }
@@ -79,11 +79,7 @@
       const g = this.ctx;
       const scale = 0.15 + 0.85 * easeOutCubic(t); // 0.15→1.0
       this.drawRitchie(CANVAS_BASE_W/2, RITCHIE_PLAY_Y, RITCHIE_R * scale);
-
-      g.fillStyle = "#dbe4ff";
-      g.font = FONTS.small;
-      g.textAlign = "center";
-      g.fillText("Get ready…", CANVAS_BASE_W/2, RITCHIE_PLAY_Y + (RITCHIE_R*0.65));
+      // Removed "Get ready…" text per request
     }
 
     drawStartPrompt(game, now){
