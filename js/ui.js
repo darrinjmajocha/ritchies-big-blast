@@ -6,9 +6,9 @@
   const { CANVAS_BASE_W, CANVAS_BASE_H, COLORS, FONTS } = window.CONSTS;
 
   // Single source of truth for Ritchie size + positions
-  const RITCHIE_R = 240;       // overall "size" control (bigger balloon)
+  const RITCHIE_R = 240;       // base radius for balloon drawing
   const RITCHIE_PLAY_X = CANVAS_BASE_W / 2;
-  const RITCHIE_PLAY_Y = 330;  // keep comfortably on screen with bigger size
+  const RITCHIE_PLAY_Y = 330;
 
   function easeOutCubic(t){ return 1 - Math.pow(1-t,3); }
   function easeInOutSine(t){ return -(Math.cos(Math.PI*t)-1)/2; }
@@ -18,9 +18,6 @@
       this.canvas = canvas;
       this.ctx = canvas.getContext("2d");
       this.assets = assets;
-      this.scale = 1;
-      this.offsetX = 0;
-      this.offsetY = 0;
     }
 
     // Desktop-friendly, letterboxed 16:9 fit
@@ -29,11 +26,9 @@
       const vw = window.innerWidth, vh = window.innerHeight;
       const scale = Math.min(vw / W, vh / H);
 
-      // internal render resolution stays native
       this.canvas.width = W;
       this.canvas.height = H;
 
-      // CSS display size (centered by parent styles)
       const cssW = Math.round(W * scale);
       const cssH = Math.round(H * scale);
       this.canvas.style.width = cssW + "px";
@@ -44,7 +39,6 @@
       const g = this.ctx;
       g.save();
       g.clearRect(0,0,this.canvas.width,this.canvas.height);
-      // background
       if(this.assets.images.bg){
         g.drawImage(this.assets.images.bg, 0,0, CANVAS_BASE_W, CANVAS_BASE_H);
       }else{
@@ -53,9 +47,7 @@
       }
     }
 
-    end(){
-      this.ctx.restore();
-    }
+    end(){ this.ctx.restore(); }
 
     // --- SCREENS ---
 
@@ -69,7 +61,6 @@
       g.font = FONTS.med;
       g.fillStyle = "#dbe4ff";
       g.fillText("Press Play to Begin", CANVAS_BASE_W/2, 240);
-      // No Ritchie on title
     }
 
     drawSetup(currentCount){
@@ -80,22 +71,19 @@
       g.fillText(`Players: ${currentCount}`, CANVAS_BASE_W/2, 160);
       g.font = FONTS.small;
       g.fillStyle = "#b8c0ff";
-      g.fillText("Use + / - or the buttons below (2–15)", CANVAS_BASE_W/2, 200);
-      // No Ritchie on setup
+      g.fillText("Use + / - or the buttons below (2–20)", CANVAS_BASE_W/2, 200);
     }
 
+    // Intro = inflate/zoom from tiny to full size (not dropping)
     drawIntro(t){
-      // Ritchie balloon floats down with easing
       const g = this.ctx;
-      const startY = -200;
-      const endY = RITCHIE_PLAY_Y;
-      const y = startY + (endY - startY) * easeOutCubic(t);
-      this.drawRitchie(CANVAS_BASE_W/2, y, RITCHIE_R);
+      const scale = 0.15 + 0.85 * easeOutCubic(t); // 0.15→1.0
+      this.drawRitchie(CANVAS_BASE_W/2, RITCHIE_PLAY_Y, RITCHIE_R * scale);
 
       g.fillStyle = "#dbe4ff";
       g.font = FONTS.small;
       g.textAlign = "center";
-      g.fillText("Get ready…", CANVAS_BASE_W/2, y + (RITCHIE_R*0.55));
+      g.fillText("Get ready…", CANVAS_BASE_W/2, RITCHIE_PLAY_Y + (RITCHIE_R*0.65));
     }
 
     drawStartPrompt(game, now){
@@ -118,25 +106,23 @@
     drawPlaying(game){
       const g = this.ctx;
 
-      // Only draw Ritchie when allowed
       if(game.showRitchie){
         const rx = RITCHIE_PLAY_X;
         const ry = RITCHIE_PLAY_Y;
-        const r = RITCHIE_R;
-        this.drawRitchie(rx, ry, r);
+        const scale = game.balloonScale || 1;
+        this.drawRitchie(rx, ry, RITCHIE_R * scale);
 
-        // If we are in the dud pause window, draw "Dud!" below Ritchie
         if(game.showDudUntil && performance.now() < game.showDudUntil){
           g.save();
           g.textAlign = "center";
           g.font = FONTS.big;
           g.fillStyle = "#ffffff";
-          g.fillText("Dud!", rx, ry + r*0.65);
+          g.fillText("Dud!", rx, ry + (RITCHIE_R*scale*0.7));
           g.restore();
         }
       }
 
-      // HUD (removed "Current: P#" as requested)
+      // HUD
       g.font = FONTS.small;
       g.fillStyle = "#b8c0ff";
       g.textAlign = "left";
@@ -168,7 +154,7 @@
       } else {
         g.save();
         g.fillStyle = "#ffecd1";
-        g.globalAlpha = 0.8;
+        g.globalAlpha = 0.9;
         g.fillRect(0,0,CANVAS_BASE_W,CANVAS_BASE_H);
         g.restore();
       }
@@ -179,12 +165,10 @@
       g.textAlign = "center";
       g.font = FONTS.big;
       g.fillStyle = "#fff";
-      // Winner text without player number
       g.fillText("Winner!", CANVAS_BASE_W/2, 180);
     }
 
     // --- SPRITES ---
-
     drawRitchie(x, y, r){
       const g = this.ctx;
       if(this.assets.images.ritchie){
@@ -192,25 +176,18 @@
         const w = r*1.6, h = r*1.6;
         g.drawImage(img, x-w/2, y-h/2, w, h);
       }else{
-        // simple placeholder balloon
+        // placeholder balloon
         g.fillStyle = "#ff7a59";
-        g.beginPath();
-        g.arc(x, y, r/2, 0, Math.PI*2);
-        g.fill();
-        // eyes
+        g.beginPath(); g.arc(x, y, r/2, 0, Math.PI*2); g.fill();
         g.fillStyle = "#fff";
         g.beginPath(); g.arc(x-28, y-10, 10, 0, Math.PI*2); g.fill();
         g.beginPath(); g.arc(x+28, y-10, 10, 0, Math.PI*2); g.fill();
         g.fillStyle = "#0b1020";
         g.beginPath(); g.arc(x-28, y-10, 5, 0, Math.PI*2); g.fill();
         g.beginPath(); g.arc(x+28, y-10, 5, 0, Math.PI*2); g.fill();
-        // string
         g.strokeStyle = "#ffc9b9";
         g.lineWidth = 3;
-        g.beginPath();
-        g.moveTo(x, y+r/2);
-        g.lineTo(x, y+r/2+60);
-        g.stroke();
+        g.beginPath(); g.moveTo(x, y+r/2); g.lineTo(x, y+r/2+60); g.stroke();
       }
     }
   }
