@@ -8,7 +8,7 @@
     ritchie: "assets/img/ritchie.png",
     button: "assets/img/button.png",
     bg: "assets/img/background.png",
-    explosion: "assets/img/explosion.gif",   // one-shot explosion gif
+    explosion: "assets/img/explosion.gif",   // one-shot pop/explosion gif
   };
 
   const SFX_PATHS = {
@@ -21,12 +21,12 @@
     dud: "assets/sfx/dud.ogg",
 
     // sequences
-    priming: "assets/sfx/priming.ogg",     // drop-in start
+    priming: "assets/sfx/priming.ogg",     // intro inflate cue
     start: "assets/sfx/start.ogg",         // “Start!” text
     countdown: "assets/sfx/countdown.ogg", // real button sequence
     fanfare: "assets/sfx/fanfare.ogg",     // winner
 
-    // legacy win (kept for compatibility; unused now)
+    // legacy win (kept for compatibility; unused)
     win: "assets/sfx/win.wav",
   };
 
@@ -58,7 +58,6 @@
       });
     }
     async loadAudioBuffer(ctx, src){
-      // If WebAudio unavailable or fails, resolve null; AudioManager will fallback.
       if(!ctx) { this._tick(); return null; }
       try{
         const resp = await fetch(src, {cache:"no-cache"});
@@ -80,7 +79,7 @@
       for(const [k,src] of sfxEntries){
         this.sfx[k] = await this.loadAudioBuffer(audioCtx, src);
       }
-      // Count both music paths as progress ticks (actual streaming handled in AudioManager)
+      // Progress ticks for music (actual streaming via <audio>)
       this._tick(); // bgm
       this._tick(); // menu
     }
