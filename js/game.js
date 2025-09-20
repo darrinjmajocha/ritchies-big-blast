@@ -28,6 +28,7 @@
       this.state = States.TITLE;
 
       this.players = [];
+      this.initialPlayersCount = 0;  // NEW: track for global suspense
       this.currentPlayerIdx = 0;
       this.roundChoices = [];
       this.armedIndex = -1;
@@ -70,6 +71,7 @@
     reset(){
       this.state = States.TITLE;
       this.players = [];
+      this.initialPlayersCount = 0;
       this.currentPlayerIdx = 0;
       this.roundChoices = [];
       this.armedIndex = -1;
@@ -103,6 +105,7 @@
     setPlayers(count){
       this.players = [];
       for(let i=0;i<count;i++) this.players.push({ id:i, alive:true, name:`P${i+1}` });
+      this.initialPlayersCount = count;                // NEW
       this.currentPlayerIdx = 0;
       this.hud.remainingPlayers = this.players.length;
 
@@ -115,6 +118,11 @@
       this.introAnimT = 0;
       this.state = States.INTRO_ANIM;
       window.audio?.playSfx("priming");
+
+      // Start game BGM immediately at 0 and fade up over 5s while intro + "Start!" happen
+      window.audio?.setMusicVolume(0);
+      window.audio?.playGameMusic(true);
+      window.audio?.fadeMusicTo(window.CONSTS.AUDIO.musicVolume, 5000);
     }
 
     startRound(){
@@ -145,17 +153,32 @@
       this.currentPlayerIdx = i;
     }
 
-    // Suspense bias: as remaining choices shrink within a round, delay increases.
-    // Resets naturally when a new round starts (choices reset).
+    // Suspense bias combines:
+    // (A) within-round progress (fewer untaken choices => larger delay)
+    // (B) overall game progress (fewer players alive => multiplier)
     computeRevealDelay(){
       const total = this.roundChoices.length;
-      const remaining = this.roundChoices.filter(c=>!c.taken).length;
-      const progress = 1 - (remaining-1)/(total-1 || 1); // 0 when many, →1 when few
-      const weight = Math.pow(progress, 3); // strong bias late in the round
-      const baseMin = 500;      // ms
-      const extraMax = 4500;    // up to 5s total
-      const r = this.rng.next(); // 0..1
-      const delay = baseMin + (extraMax * weight * (0.5 + 0.5*r));
+      const remainingChoices = this.roundChoices.filter(c=>!c.taken).length;
+      const roundProgress = 1 - (remainingChoices-1)/(total-1 || 1); // 0 → start of round, 1 → last pick
+      const roundWeight = Math.pow(roundProgress, 3);                // strong bias late in round
+
+      const alive = this.players.filter(p=>p.alive).length;
+      const init = Math.max(2, this.initialPlayersCount || alive);
+      const gameProgress = 1 - (alive-1)/(init-1);                   // 0 → start of game, 1 → nearly done
+      const globalMult = 1 + 0.8 * gameProgress;                     // up to ~1.8× near the end
+
+      const baseMin = 500;       // ms
+      const extraMax = 4500;     // ms (cap still 5s)
+      const r = this.rng.next(); // 0..1 random
+      let delay = baseMin + (extraMax * roundWeight * (0.5 + 0.5*r));
+      delay *= globalMult;
+
+      // Floor late-game suspense a bit: at 75%+ into the game, ensure 1–2s minimum
+      if(gameProgress >= 0.75){
+        const extraFloor = 1000 + 1000 * ((gameProgress - 0.75) / 0.25); // 1000→2000ms
+        delay = Math.max(delay, extraFloor);
+      }
+
       return Math.min(5000, Math.floor(delay));
     }
 
@@ -212,8 +235,7 @@
 
         case States.START_PROMPT:
           if(now >= this.startPromptUntil){
-            // Begin actual play and start BGM
-            window.audio?.fadeMusicTo(window.CONSTS.AUDIO.musicVolume, 600);
+            // Begin actual play (fade already running from setPlayers)
             if(!window.audio?.musicEl){ window.audio?.playGameMusic(true); }
             this.state = States.PLAYING;
           }
@@ -290,7 +312,7 @@
             }else{
               // Pop/flash
               this.showRitchie = false;
-              this.explodingUntil = now + 2200;   // +1s longer than before for smoother fade
+              this.explodingUntil = now + 2200;   // smooth fade before next intro
               this.state = States.EXPLODING;
             }
           }
