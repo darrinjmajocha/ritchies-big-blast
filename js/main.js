@@ -9,6 +9,7 @@
   const loadingLabel = document.getElementById("loadingLabel");
   const enableBtn = document.getElementById("enableSoundBtn");
   const resetBtn = document.getElementById("resetBtn");
+  const muteBtn  = document.getElementById("muteBtn");
 
   const assets = new AssetManager((pct)=>{ loadingLabel.textContent = `Loading… ${pct}%`; });
   window.audio = new AudioManager(assets);
@@ -33,7 +34,6 @@
     const handler = async ()=>{
       document.removeEventListener("pointerdown", handler, true);
       await window.audio.resume();
-      // If we're on Title/Setup and no music is playing yet, start the menu loop now.
       if((game.state===GameStates.TITLE || game.state===GameStates.SETUP) &&
          (!window.audio.musicEl || window.audio.musicEl.paused)){
         await window.audio.playMenuMusic(true);
@@ -45,7 +45,6 @@
   // --- State controls ---
   function gotoTitle(){
     game.reset();
-    // Do NOT try to play menu music immediately (autoplay). Arm first-interaction instead.
     window.audio?.stopMusic();
     armFirstInteraction();
     buildTitleUI();
@@ -53,18 +52,16 @@
   function gotoSetup(){
     game.state = GameStates.SETUP;
     game.players = [];
-    // On entering setup: if nothing is playing, try to start menu music (will work after user gesture).
     if(!window.audio.musicEl || window.audio.musicEl.paused){
       window.audio.playMenuMusic(true);
     }
-    buildSetupUI(4);
+    buildSetupUI(4); // default 4
   }
 
   function buildTitleUI(){
     ui.clear();
     const row = ui.row("main");
     const play = ui.button("Play", "primary", async ()=>{
-      // User gesture here should allow audio. Resume context, ensure menu music runs in setup.
       await window.audio.resume();
       gotoSetup();
     }, "Start the game");
@@ -73,13 +70,12 @@
 
   function buildSetupUI(startCount){
     ui.clear();
-    let count = Math.min(15, Math.max(2, startCount));
+    let count = Math.min(20, Math.max(2, startCount));
 
     const controls = ui.row("setup");
     const minus = ui.button("−", "", ()=>{ count=Math.max(2,count-1); }, "Decrease player count");
-    const plus  = ui.button("+", "", ()=>{ count=Math.min(15,count+1); }, "Increase player count");
+    const plus  = ui.button("+", "", ()=>{ count=Math.min(20,count+1); }, "Increase player count");
     const start = ui.button("Start", "primary", ()=>{
-      // Stop menu music; gameplay music will start later when PLAYING begins.
       window.audio?.stopMusic();
       game.setPlayers(count);
     }, "Confirm player count and start");
@@ -89,7 +85,7 @@
 
     window.onkeydown = (e)=>{
       if(game.state!==GameStates.SETUP) return;
-      if(e.key==="+") { count=Math.min(15,count+1); }
+      if(e.key==="+") { count=Math.min(20,count+1); }
       if(e.key==="-") { count=Math.max(2,count-1); }
       if(e.key==="Enter"){
         window.audio?.stopMusic();
@@ -100,7 +96,7 @@
     game._setupCountRef = ()=>count;
   }
 
-  // (choice buttons layout code unchanged from your latest)
+  // Two-row layout; bottom anchors single-row case for composition
   function buildChoiceButtons(){
     ui.clear();
     const topRow = ui.row("choicesTop");
@@ -110,7 +106,6 @@
 
     const n = game.roundChoices.length;
     const topCount = Math.floor(n/2);
-    const bottomCount = n - topCount;
     const putAllInBottom = (n <= 5);
 
     function makeBtn(c, idx){
@@ -147,71 +142,82 @@
     ui.clear();
     const row = ui.row("actions");
     const again = ui.button("Play Again", "primary", ()=>{
-      // Winner → back to menu/setup with menu loop
       window.audio?.stopMusic();
       window.audio?.playMenuMusic(true);
       gotoSetup();
     }, "Return to player selection");
+    const menu = ui.button("Main Menu", "", ()=>{
+      window.audio?.stopMusic();
+      window.audio?.playMenuMusic(true);
+      gotoTitle();
+    }, "Return to main menu");
     row.appendChild(again);
+    row.appendChild(menu);
   }
 
-  // number key shortcuts unchanged …
+  // Quick-select by keyboard:
+  // 1–9, 0=10, A–J => 11..20
+  window.addEventListener("keydown", (e)=>{
+    if(game.state!==GameStates.PLAYING) return;
+    const key = e.key;
+    let num = null;
+    if(key>="1" && key<="9") num = parseInt(key,10);
+    else if(key==="0") num = 10;
+    else if(/^[a-j]$/i.test(key)){ num = 10 + (key.toLowerCase().charCodeAt(0)-96); } // a=11 .. j=20
+    if(num!==null){
+      const idx = num-1;
+      if(idx>=0 && idx<game.roundChoices.length){
+        game.selectChoice(idx);
+      }
+    }
+  });
 
+  // Enable sound retry (for autoplay policies)
   enableBtn.addEventListener("click", async ()=>{
     enableBtn.classList.add("hidden");
     await window.audio.resume();
-    // If on menu screens, spin up menu music now.
     if((game.state===GameStates.TITLE || game.state===GameStates.SETUP) &&
        (!window.audio.musicEl || window.audio.musicEl.paused)){
       window.audio.playMenuMusic(true);
     }
   });
 
+  // Reset → Setup + menu music
   resetBtn.addEventListener("click", ()=>{
     window.audio?.stopMusic();
     window.audio?.playMenuMusic(true);
     gotoSetup();
   });
 
-  // --- Main loop (rendering & state) ---
+  // Mute toggle
+  function refreshMuteBtn(){
+    const muted = window.audio.isMuted();
+    muteBtn.textContent = muted ? "Unmute" : "Mute";
+    muteBtn.setAttribute("aria-pressed", String(muted));
+    muteBtn.setAttribute("aria-label", muted ? "Unmute sound" : "Mute sound");
+  }
+  muteBtn.addEventListener("click", ()=>{
+    window.audio.setMuted(!window.audio.isMuted());
+    refreshMuteBtn();
+  });
+  refreshMuteBtn();
+
+  // --- Main loop ---
   function loop(){
     const now = performance.now();
     renderer.begin();
 
     switch(game.state){
-      case GameStates.TITLE:
-        renderer.drawTitle();
-        break;
-      case GameStates.SETUP:
-        renderer.drawSetup(game._setupCountRef ? game._setupCountRef() : 4);
-        break;
-      case GameStates.INTRO_ANIM:
-        renderer.drawIntro(game.introAnimT);
-        break;
-      case GameStates.START_PROMPT:
-        renderer.drawPlaying(game);
-        renderer.drawStartPrompt(game, now);
-        break;
-      case GameStates.PLAYING:
-        renderer.drawPlaying(game);
-        break;
-      case GameStates.REVEAL:
-        renderer.drawReveal(game);
-        break;
-      case GameStates.SAFE_HOLD:
-        renderer.drawPlaying(game);
-        break;
-      case GameStates.COUNTDOWN:
-        renderer.drawPlaying(game);
-        renderer.drawCountdown(game);
-        break;
-      case GameStates.EXPLODING:
-        renderer.drawPlaying(game);
-        renderer.drawExplosion();
-        break;
-      case GameStates.GAME_OVER:
-        renderer.drawGameOver(game);
-        break;
+      case GameStates.TITLE:       renderer.drawTitle(); break;
+      case GameStates.SETUP:       renderer.drawSetup(game._setupCountRef ? game._setupCountRef() : 4); break;
+      case GameStates.INTRO_ANIM:  renderer.drawIntro(game.introAnimT); break;
+      case GameStates.START_PROMPT:renderer.drawPlaying(game); renderer.drawStartPrompt(game, now); break;
+      case GameStates.PLAYING:     renderer.drawPlaying(game); break;
+      case GameStates.REVEAL:      renderer.drawReveal(game); break;
+      case GameStates.SAFE_HOLD:   renderer.drawPlaying(game); break;
+      case GameStates.COUNTDOWN:   renderer.drawPlaying(game); renderer.drawCountdown(game); break;
+      case GameStates.EXPLODING:   renderer.drawPlaying(game); renderer.drawExplosion(); break;
+      case GameStates.GAME_OVER:   renderer.drawGameOver(game); break;
     }
 
     renderer.end();
@@ -235,7 +241,11 @@
     requestAnimationFrame(loop);
   }
 
-  // Start at Title; arm the first-interaction handler for menu music
+  // Start
   gotoTitle();
   requestAnimationFrame(loop);
+
+  // Expose for quick testing
+  window._game = game;
+  window._audio = window.audio;
 })();
