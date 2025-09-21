@@ -28,7 +28,7 @@
       this.state = States.TITLE;
 
       this.players = [];
-      this.initialPlayersCount = 0;  // NEW: track for global suspense
+      this.initialPlayersCount = 0;
       this.currentPlayerIdx = 0;
       this.roundChoices = [];
       this.armedIndex = -1;
@@ -53,6 +53,7 @@
 
       // Dud overlay
       this.showDudUntil = 0;
+      this.dudShownAt = 0;         // NEW: for fade-in timing
 
       // Countdown
       this.countdownStartAt = 0;
@@ -90,6 +91,7 @@
       this.startPromptUntil = 0;
       this.explodingUntil = 0;
       this.showDudUntil = 0;
+      this.dudShownAt = 0;
 
       this.countdownStartAt = 0;
       this.countdownEndAt = 0;
@@ -105,7 +107,7 @@
     setPlayers(count){
       this.players = [];
       for(let i=0;i<count;i++) this.players.push({ id:i, alive:true, name:`P${i+1}` });
-      this.initialPlayersCount = count;                // NEW
+      this.initialPlayersCount = count;
       this.currentPlayerIdx = 0;
       this.hud.remainingPlayers = this.players.length;
 
@@ -173,7 +175,12 @@
       let delay = baseMin + (extraMax * roundWeight * (0.5 + 0.5*r));
       delay *= globalMult;
 
-      // Floor late-game suspense a bit: at 75%+ into the game, ensure 1–2s minimum
+      // Slightly reduce the average suspense at the last few plungers (~0.5s)
+      // Scales with roundProgress so very late picks get the full reduction.
+      const reduction = 500 * Math.pow(roundProgress, 1.2);
+      delay = Math.max(baseMin, delay - reduction);
+
+      // Late-game floor: at 75%+ into the game, ensure ~1–2s minimum
       if(gameProgress >= 0.75){
         const extraFloor = 1000 + 1000 * ((gameProgress - 0.75) / 0.25); // 1000→2000ms
         delay = Math.max(delay, extraFloor);
@@ -257,8 +264,9 @@
               this.nextTickAt = now + 1000;       // first number at +1s
               this.state = States.COUNTDOWN;
             }else{
-              // DUD: keep Ritchie, play dud, show “Dud!” for ~1s, then resume
+              // DUD: keep Ritchie, play dud, show “Dud!” for ~1s (with 0.5s fade-in), then resume
               window.audio?.playSfx("dud");
+              this.dudShownAt = now;
               this.showDudUntil = now + 1000;
               this.state = States.SAFE_HOLD;
               this.pendingReveal = { at: now + 1000 }; // 1s breathing room
@@ -310,9 +318,10 @@
             }else if(this.countdownValue === 2){
               this.countdownValue = 1; this.nextTickAt = now + 1000;
             }else{
-              // Pop/flash
+              // Pop/flash + BOOM
               this.showRitchie = false;
-              this.explodingUntil = now + 2200;   // smooth fade before next intro
+              window.audio?.playSfx("boom");
+              this.explodingUntil = now + 1000;   // 1s (was 2200ms)
               this.state = States.EXPLODING;
             }
           }
