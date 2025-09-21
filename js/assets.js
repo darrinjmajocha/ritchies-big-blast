@@ -24,6 +24,7 @@
     priming: "assets/sfx/priming.ogg",     // intro inflate cue
     start: "assets/sfx/start.ogg",         // “Start!” text
     countdown: "assets/sfx/countdown.ogg", // real button sequence
+    boom: "assets/sfx/boom.wav",           // NEW: pop SFX when countdown ends
     fanfare: "assets/sfx/fanfare.ogg",     // winner
 
     // legacy win (kept for compatibility; unused)
