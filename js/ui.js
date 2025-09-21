@@ -79,7 +79,7 @@
       const g = this.ctx;
       const scale = 0.15 + 0.85 * easeOutCubic(t); // 0.15→1.0
       this.drawRitchie(CANVAS_BASE_W/2, RITCHIE_PLAY_Y, RITCHIE_R * scale);
-      // Removed "Get ready…" text per request
+      // no "Get ready…" text (per latest flow)
     }
 
     drawStartPrompt(game, now){
@@ -109,7 +109,11 @@
         this.drawRitchie(rx, ry, RITCHIE_R * scale);
 
         if(game.showDudUntil && performance.now() < game.showDudUntil){
+          // Fade in over 0.5s from when dud started
+          const now = performance.now();
+          const t = Math.min(1, (now - (game.dudShownAt || 0)) / 500);
           g.save();
+          g.globalAlpha = t; // 0→1 over 0.5s
           g.textAlign = "center";
           g.font = FONTS.big;
           g.fillStyle = "#ffffff";
@@ -135,7 +139,8 @@
       const g = this.ctx;
       g.save();
       g.textAlign = "center";
-      g.font = FONTS.big;
+      // Twice as big as before (big ~72px → 144px)
+      g.font = "800 144px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, sans-serif";
       g.fillStyle = "#ffffff";
       g.fillText(String(game.countdownValue), CANVAS_BASE_W/2, CANVAS_BASE_H/2);
       g.restore();
