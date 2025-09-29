@@ -56,7 +56,8 @@
       g.fillStyle = "#fff";
       g.font = FONTS.big;
       g.textAlign = "center";
-      g.fillText("Ritchie's Big Blast", CANVAS_BASE_W/2, 180);
+      // RIT capitalized in-name
+      g.fillText("RITchie's Big Blast", CANVAS_BASE_W/2, 180);
 
       g.font = FONTS.med;
       g.fillStyle = "#dbe4ff";
@@ -128,18 +129,6 @@
       g.textAlign = "left";
       g.fillText(`Remaining Players: ${game.hud.remainingPlayers}`, 24, 34);
       g.fillText(`Choices this round: ${game.hud.remainingChoices}`, 24, 60);
-
-      // Chance text (only during PLAYING, hides the instant a plunger is selected)
-      if (game.state === game.states.PLAYING) {
-        const remaining = game.roundChoices.filter(c => !c.taken).length;
-        if (remaining > 0) {
-          const pct = Math.round(100 / remaining); // 1 / remaining choices
-          // ~2× HUD small (36px), left-aligned under the two lines above
-          g.font = "800 36px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, sans-serif";
-          g.fillStyle = "#ffffff";
-          g.fillText(`${pct}% Chance of Popping`, 24, 98);
-        }
-      }
     }
 
     drawReveal(game){
