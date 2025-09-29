@@ -1,8 +1,7 @@
 /**
  * main.js
  * Bootstraps app, manages state loop, inputs, resizing, and ties everything together.
- * Volume button now cycles 100 → 75 → 50 → 25 → 0 → repeat.
- * Ctrl+click handling unchanged here; game logic adjusted in game.js.
+ * Adds: how-to-play video, volume-step button, Remove Suspense toggle, CTRL+click force-pop.
  */
 (async function(){
   const canvas = document.getElementById("gameCanvas");
@@ -116,7 +115,7 @@
     const row = ui.row("main");
     const play = ui.button("Play", "primary", async ()=>{
       await window.audio.resume();
-      showHowToVideo(); // NEW: video between Title → Setup
+      showHowToVideo();
     }, "Start the game");
     row.appendChild(play);
   }
@@ -124,6 +123,7 @@
   function buildSetupUI(startCount){
     ui.clear();
     let count = Math.min(20, Math.max(2, startCount));
+    game.removeSuspense = false; // default OFF each visit to setup
 
     const controls = ui.row("setup");
     const minus = ui.button("−", "", ()=>{ count=Math.max(2,count-1); }, "Decrease player count");
@@ -132,9 +132,18 @@
       window.audio?.stopMusic();
       game.setPlayers(count);
     }, "Confirm player count and start");
+
+    // NEW: Remove Suspense toggle (to the right of Start)
+    const suspBtn = ui.button("Remove Suspense: Off", "", ()=>{
+      game.removeSuspense = !game.removeSuspense;
+      suspBtn.textContent = `Remove Suspense: ${game.removeSuspense ? "On" : "Off"}`;
+      suspBtn.setAttribute("aria-pressed", String(game.removeSuspense));
+    }, "Toggle to remove suspense reveal timing");
+
     controls.appendChild(minus);
     controls.appendChild(plus);
     controls.appendChild(start);
+    controls.appendChild(suspBtn); // to the right of Start
 
     window.onkeydown = (e)=>{
       if(game.state!==GameStates.SETUP) return;
