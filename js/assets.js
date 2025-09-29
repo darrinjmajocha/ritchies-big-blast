@@ -5,7 +5,10 @@
 (function(){
   // Image & audio paths
   const IMG_PATHS = {
-    ritchie: "assets/img/ritchie.png",
+    ritchie:   "assets/img/ritchie.png",
+    ritchie_3: "assets/img/ritchie_3.png", // eyes show "3"
+    ritchie_2: "assets/img/ritchie_2.png", // eyes show "2"
+    ritchie_1: "assets/img/ritchie_1.png", // eyes show "1"
     button: "assets/img/button.png",
     bg: "assets/img/background.png",
     explosion: "assets/img/explosion.gif",   // one-shot pop/explosion gif
@@ -24,7 +27,7 @@
     priming: "assets/sfx/priming.ogg",     // intro inflate cue
     start: "assets/sfx/start.ogg",         // “Start!” text
     countdown: "assets/sfx/countdown.ogg", // real button sequence
-    boom: "assets/sfx/boom.wav",           // NEW: pop SFX when countdown ends
+    boom: "assets/sfx/boom.wav",           // pop SFX when countdown ends
     fanfare: "assets/sfx/fanfare.ogg",     // winner
 
     // legacy win (kept for compatibility; unused)
