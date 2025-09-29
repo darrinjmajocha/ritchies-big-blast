@@ -1,7 +1,8 @@
 /**
  * main.js
  * Bootstraps app, manages state loop, inputs, resizing, and ties everything together.
- * Adds: how-to-play video between Title → Setup, volume cycling button, CTRL+click force-pop.
+ * Volume button now cycles 100 → 75 → 50 → 25 → 0 → repeat.
+ * Ctrl+click handling unchanged here; game logic adjusted in game.js.
  */
 (async function(){
   const canvas = document.getElementById("gameCanvas");
@@ -10,7 +11,7 @@
   const loadingLabel = document.getElementById("loadingLabel");
   const enableBtn = document.getElementById("enableSoundBtn");
   const resetBtn = document.getElementById("resetBtn");
-  const muteBtn  = document.getElementById("muteBtn"); // repurposed as Volume button
+  const muteBtn  = document.getElementById("muteBtn"); // volume cycle
 
   const assets = new AssetManager((pct)=>{ loadingLabel.textContent = `Loading… ${pct}%`; });
   window.audio = new AudioManager(assets);
@@ -27,12 +28,12 @@
   window.addEventListener("resize", resize, {passive:true});
   resize();
 
-  // Track CTRL state for "force pop"
+  // Track CTRL state (force-pop)
   window._ctrlHeld = false;
   window.addEventListener("keydown", (e)=>{ if(e.key==="Control") window._ctrlHeld = true; }, {passive:true});
   window.addEventListener("keyup",   (e)=>{ if(e.key==="Control") window._ctrlHeld = false; }, {passive:true});
 
-  // --- First interaction bootstrap for audio/menu music ---
+  // First interaction bootstrap for audio/menu music
   let firstInteractionArmed = true;
   const armFirstInteraction = ()=>{
     if(!firstInteractionArmed) return;
@@ -48,10 +49,9 @@
     document.addEventListener("pointerdown", handler, true);
   };
 
-  // --- How-to-play video overlay ---
+  // How-to-play overlay (plays between Title → Setup)
   let howtoOverlay = null;
   function showHowToVideo(){
-    // stop menu music while video plays
     window.audio?.stopMusic();
 
     if(!howtoOverlay){
@@ -86,17 +86,16 @@
       vidEl.pause();
       howtoOverlay.removeEventListener("pointerdown", advance, true);
       howtoOverlay.remove();
-      gotoSetup(); // proceed to player select
+      gotoSetup();
     };
     howtoOverlay.addEventListener("pointerdown", advance, true);
 
-    // user gesture already happened (click Play), should be allowed
     vidEl.currentTime = 0;
     vidEl.muted = false;
-    vidEl.play().catch(()=>{/* if blocked, user will click overlay to advance anyway */});
+    vidEl.play().catch(()=>{});
   }
 
-  // --- State controls ---
+  // State transitions
   function gotoTitle(){
     game.reset();
     window.audio?.stopMusic();
@@ -109,7 +108,7 @@
     if(!window.audio.musicEl || window.audio.musicEl.paused){
       window.audio.playMenuMusic(true);
     }
-    buildSetupUI(4); // default 4
+    buildSetupUI(4);
   }
 
   function buildTitleUI(){
@@ -117,8 +116,7 @@
     const row = ui.row("main");
     const play = ui.button("Play", "primary", async ()=>{
       await window.audio.resume();
-      // NEW: show how-to-play looping video before Setup
-      showHowToVideo();
+      showHowToVideo(); // NEW: video between Title → Setup
     }, "Start the game");
     row.appendChild(play);
   }
@@ -151,7 +149,7 @@
     game._setupCountRef = ()=>count;
   }
 
-  // Two-row layout; bottom anchors single-row case for composition
+  // Build choice buttons for PLAYING state
   function buildChoiceButtons(){
     ui.clear();
     const topRow = ui.row("choicesTop");
@@ -215,15 +213,14 @@
     row.appendChild(menu);
   }
 
-  // Quick-select by keyboard:
-  // 1–9, 0=10, A–J => 11..20
+  // Keyboard shortcuts for picks: 1–9, 0=10, A–J => 11..20
   window.addEventListener("keydown", (e)=>{
     if(game.state!==GameStates.PLAYING) return;
     const key = e.key;
     let num = null;
     if(key>="1" && key<="9") num = parseInt(key,10);
     else if(key==="0") num = 10;
-    else if(/^[a-j]$/i.test(key)){ num = 10 + (key.toLowerCase().charCodeAt(0)-96); } // a=11 .. j=20
+    else if(/^[a-j]$/i.test(key)){ num = 10 + (key.toLowerCase().charCodeAt(0)-96); }
     if(num!==null){
       const idx = num-1;
       if(idx>=0 && idx<game.roundChoices.length){
@@ -232,7 +229,7 @@
     }
   });
 
-  // Enable sound retry (for autoplay policies)
+  // Autoplay re-enable
   enableBtn.addEventListener("click", async ()=>{
     enableBtn.classList.add("hidden");
     await window.audio.resume();
@@ -242,29 +239,25 @@
     }
   });
 
-  // Reset → Setup + menu music
+  // Reset to Setup
   resetBtn.addEventListener("click", ()=>{
     window.audio?.stopMusic();
     window.audio?.playMenuMusic(true);
     gotoSetup();
   });
 
-  // Volume cycle button (full → half → mute → full)
+  // --- Volume cycle button (100 → 75 → 50 → 25 → 0 → repeat) ---
   function refreshVolumeBtn(){
-    const lvl = window.audio.getVolumeLevel();
-    const label = (lvl==="full") ? "Volume: 100%" : (lvl==="half" ? "Volume: 50%" : "Volume: Mute");
+    const label = window.audio.getVolumeLabel();
     muteBtn.textContent = label;
-    muteBtn.setAttribute("aria-pressed", String(lvl==="mute"));
     muteBtn.setAttribute("aria-label", label);
   }
   muteBtn.addEventListener("click", ()=>{
-    const cur = window.audio.getVolumeLevel();
-    const next = (cur==="full") ? "half" : (cur==="half" ? "mute" : "full");
-    window.audio.setVolumeLevel(next);
+    window.audio.cycleVolume();
     refreshVolumeBtn();
   });
-  // default: full volume
-  window.audio.setVolumeLevel("full");
+  // default 100%
+  window.audio.setVolumeIndex(0);
   refreshVolumeBtn();
 
   // --- Main loop ---
