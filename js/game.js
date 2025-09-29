@@ -122,7 +122,7 @@
       window.audio?.playSfx("priming");
 
       // Start game BGM immediately at 0 and fade up over 5s while intro + "Start!" happen
-      window.audio?.setMusicVolume(0);
+      window.audio?.setMusicVolume(window.CONSTS.AUDIO.musicVolume);
       window.audio?.playGameMusic(true);
       window.audio?.fadeMusicTo(window.CONSTS.AUDIO.musicVolume, 5000);
     }
@@ -155,9 +155,7 @@
       this.currentPlayerIdx = i;
     }
 
-    // Suspense bias combines:
-    // (A) within-round progress (fewer untaken choices => larger delay)
-    // (B) overall game progress (fewer players alive => multiplier)
+    // Suspense bias combines within-round progress + overall game progress
     computeRevealDelay(){
       const total = this.roundChoices.length;
       const remainingChoices = this.roundChoices.filter(c=>!c.taken).length;
@@ -175,12 +173,9 @@
       let delay = baseMin + (extraMax * roundWeight * (0.5 + 0.5*r));
       delay *= globalMult;
 
-      // Slightly reduce the average suspense at the last few plungers (~0.5s)
-      // Scales with roundProgress so very late picks get the full reduction.
       const reduction = 500 * Math.pow(roundProgress, 1.2);
       delay = Math.max(baseMin, delay - reduction);
 
-      // Late-game floor: at 75%+ into the game, ensure ~1–2s minimum
       if(gameProgress >= 0.75){
         const extraFloor = 1000 + 1000 * ((gameProgress - 0.75) / 0.25); // 1000→2000ms
         delay = Math.max(delay, extraFloor);
@@ -189,7 +184,11 @@
       return Math.min(5000, Math.floor(delay));
     }
 
-    selectChoice(index){
+    /**
+     * @param {number} index
+     * @param {boolean} forcePop - if true (CTRL-held), treat as armed and go straight to countdown
+     */
+    selectChoice(index, forcePop=false){
       if(this.state!==States.PLAYING) return;
       const choice = this.roundChoices[index];
       if(!choice || choice.taken) return;
@@ -200,9 +199,27 @@
 
       this.selectedChoice = index;
 
-      // suspense; reveal after plunger + biased delay
-      const delay = 1000 + this.computeRevealDelay();
-      this.pendingReveal = { at: performance.now() + delay };
+      const now = performance.now();
+
+      if(forcePop){
+        // Treat as if this selection is the bomb; keep visuals (countdown) the same,
+        // but skip the random suspense wait.
+        choice.taken = true;
+        this.armedIndex = index; // for styling consistency if needed
+        window.audio?.playSfx("countdown");
+        this.countdownStartAt = now;
+        this.countdownEndAt   = now + 4000;
+        this.balloonScale = 1;
+        this.countdownValue = null;
+        this.nextTickAt = now + 1000;
+        this.state = States.COUNTDOWN;
+        return;
+      }
+
+      // Normal flow → suspense; reveal after plunger + biased delay
+      const extraSmallGamePad = (this.initialPlayersCount <= 4) ? 1000 : 0; // additional default 1s
+      const delay = 1000 + extraSmallGamePad + this.computeRevealDelay();
+      this.pendingReveal = { at: now + delay };
       this.state = States.REVEAL;
     }
 
@@ -216,22 +233,18 @@
             this.balloonScale = 1;
 
             if(this.skipStartPromptOnce){
-              // Post-elimination or all-duds re-intro: skip "Start!"
               this.skipStartPromptOnce = false;
 
-              // If flagged, start a fresh round now
               if(this.startNewRoundAfterIntro){
                 this.startNewRoundAfterIntro = false;
                 this.startRound();
               }
 
-              // Ensure game music and volume
               if(!window.audio?.musicEl){ window.audio?.playGameMusic(true); }
               window.audio?.fadeMusicTo(window.CONSTS.AUDIO.musicVolume, 600);
 
               this.state = States.PLAYING;
             } else {
-              // First intro only: show Start! then begin the first round
               this.state = States.START_PROMPT;
               this.startPromptUntil = now + 3000; // 3s
               window.audio?.playSfx("start");
@@ -242,7 +255,6 @@
 
         case States.START_PROMPT:
           if(now >= this.startPromptUntil){
-            // Begin actual play (fade already running from setPlayers)
             if(!window.audio?.musicEl){ window.audio?.playGameMusic(true); }
             this.state = States.PLAYING;
           }
@@ -255,7 +267,6 @@
             if(c) c.taken = true;
 
             if(armed){
-              // Real button: start countdown (1s beat, then 3/2/1 each 1s)
               window.audio?.playSfx("countdown");
               this.countdownStartAt = now;
               this.countdownEndAt   = now + 4000; // total window for balloon expansion
@@ -264,7 +275,6 @@
               this.nextTickAt = now + 1000;       // first number at +1s
               this.state = States.COUNTDOWN;
             }else{
-              // DUD: keep Ritchie, play dud, show “Dud!” for ~1s (with 0.5s fade-in), then resume
               window.audio?.playSfx("dud");
               this.dudShownAt = now;
               this.showDudUntil = now + 1000;
@@ -278,7 +288,6 @@
           if(this.pendingReveal && now >= this.pendingReveal.at){
             this.pendingReveal = null;
 
-            // If only one unpicked remains AND it's the bomb, re-arm and quick re-intro (same round)
             const remaining = this.roundChoices.filter(c=>!c.taken).map(c=>c.idx);
             if(remaining.length === 1 && remaining[0] === this.armedIndex){
               const n = this.roundChoices.length;
@@ -286,7 +295,6 @@
               this.armedIndex = this.rng.pickInt(0, n-1);
               this.hud.remainingChoices = n;
 
-              // Quick re-intro: faster inflate, no Start!
               this.showRitchie = false;
               this.introDurMs = 1500;             // 2x faster
               this.introStartAt = now;
@@ -298,7 +306,6 @@
               return;
             }
 
-            // Normal dud flow: next player and fade music back in
             this.nextPlayer();
             window.audio?.fadeMusicTo(1, 3000);
             this.state = States.PLAYING;
@@ -306,7 +313,6 @@
           break;
 
         case States.COUNTDOWN: {
-          // Balloon rapidly expands during countdown
           const t = clamp01((now - this.countdownStartAt) / (this.countdownEndAt - this.countdownStartAt));
           this.balloonScale = 1 + 1.0 * easeOutCubic(t); // up to ~2.0x
 
@@ -318,7 +324,6 @@
             }else if(this.countdownValue === 2){
               this.countdownValue = 1; this.nextTickAt = now + 1000;
             }else{
-              // Pop/flash + BOOM
               this.showRitchie = false;
               window.audio?.playSfx("boom");
               this.explodingUntil = now + 1000;   // 1s (was 2200ms)
@@ -329,18 +334,14 @@
 
         case States.EXPLODING:
           if(now >= this.explodingUntil){
-            // Eliminate current player
             const cp = this.currentPlayer;
             if(cp){ cp.alive = false; this.hud.remainingPlayers = this.players.filter(p=>p.alive).length; }
 
-            // Winner?
             if(this.hud.remainingPlayers <= 1){
               this.winner = this.players.find(p=>p.alive) || null;
               window.audio?.playSfx("fanfare");
-              // Show winner screen (buttons handle returning)
               this.state = States.GAME_OVER;
             }else{
-              // Next round: faster inflate, skip Start!, and create a new round after intro
               this.nextIntroDurMs = 1500;
               this.introDurMs = this.nextIntroDurMs;
               this.introStartAt = now;
