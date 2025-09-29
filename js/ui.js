@@ -5,10 +5,10 @@
 (function(){
   const { CANVAS_BASE_W, CANVAS_BASE_H, COLORS, FONTS } = window.CONSTS;
 
-  // Bigger, unified Ritchie size + placement
-  const RITCHIE_R = 300;              // was 240
+  // Bigger, unified RITchie size + placement
+  const RITCHIE_R = 300;
   const RITCHIE_PLAY_X = CANVAS_BASE_W / 2;
-  const RITCHIE_PLAY_Y = 360;         // nudged down for larger size
+  const RITCHIE_PLAY_Y = 360;
 
   function easeOutCubic(t){ return 1 - Math.pow(1-t,3); }
   function easeInOutSine(t){ return -(Math.cos(Math.PI*t)-1)/2; }
@@ -56,7 +56,6 @@
       g.fillStyle = "#fff";
       g.font = FONTS.big;
       g.textAlign = "center";
-      // RIT capitalized in-name
       g.fillText("RITchie's Big Blast", CANVAS_BASE_W/2, 180);
 
       g.font = FONTS.med;
@@ -79,8 +78,7 @@
     drawIntro(t){
       const g = this.ctx;
       const scale = 0.15 + 0.85 * easeOutCubic(t); // 0.15→1.0
-      this.drawRitchie(CANVAS_BASE_W/2, RITCHIE_PLAY_Y, RITCHIE_R * scale);
-      // no "Get ready…" text (per latest flow)
+      this.drawRitchie(CANVAS_BASE_W/2, RITCHIE_PLAY_Y, RITCHIE_R * scale, "ritchie");
     }
 
     drawStartPrompt(game, now){
@@ -107,7 +105,15 @@
         const rx = RITCHIE_PLAY_X;
         const ry = RITCHIE_PLAY_Y;
         const scale = game.balloonScale || 1;
-        this.drawRitchie(rx, ry, RITCHIE_R * scale);
+
+        // Decide which balloon image to show during countdown
+        let variant = "ritchie";
+        if (game.state === window.GameStates.COUNTDOWN) {
+          if (game.countdownValue === 3) variant = "ritchie_3";
+          else if (game.countdownValue === 2) variant = "ritchie_2";
+          else if (game.countdownValue === 1) variant = "ritchie_1";
+        }
+        this.drawRitchie(rx, ry, RITCHIE_R * scale, variant);
 
         if(game.showDudUntil && performance.now() < game.showDudUntil){
           // Fade in over 0.5s from when dud started
@@ -123,24 +129,32 @@
         }
       }
 
-      // HUD
+      // HUD (top-left)
       g.font = FONTS.small;
       g.fillStyle = "#b8c0ff";
       g.textAlign = "left";
       g.fillText(`Remaining Players: ${game.hud.remainingPlayers}`, 24, 34);
       g.fillText(`Choices this round: ${game.hud.remainingChoices}`, 24, 60);
+
+      // Restored: pop % chance (1 / remaining untaken)
+      const remaining = (game.roundChoices || []).filter(c => !c.taken).length;
+      if (remaining > 0) {
+        const pct = Math.round(100 / remaining);
+        g.fillText(`Pop chance: ${pct}%`, 24, 86);
+      }
     }
 
     drawReveal(game){
       this.drawPlaying(game);
     }
 
+    // Keep the old numeric countdown invisible (opacity 0) per your note.
     drawCountdown(game){
       if(game.countdownValue === null) return;
       const g = this.ctx;
       g.save();
+      g.globalAlpha = 0; // invisible text countdown
       g.textAlign = "center";
-      // Twice as big as before (big ~72px → 144px)
       g.font = "800 144px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, sans-serif";
       g.fillStyle = "#ffffff";
       g.fillText(String(game.countdownValue), CANVAS_BASE_W/2, CANVAS_BASE_H/2);
@@ -171,10 +185,11 @@
     }
 
     // --- SPRITES ---
-    drawRitchie(x, y, r){
+    // imgKey: "ritchie" (default), or "ritchie_3" / "ritchie_2" / "ritchie_1"
+    drawRitchie(x, y, r, imgKey="ritchie"){
       const g = this.ctx;
-      if(this.assets.images.ritchie){
-        const img = this.assets.images.ritchie;
+      const img = this.assets.images[imgKey] || this.assets.images.ritchie;
+      if(img){
         const w = r*1.6, h = r*1.6;
         g.drawImage(img, x-w/2, y-h/2, w, h);
       }else{
