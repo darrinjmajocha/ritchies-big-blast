@@ -28,12 +28,13 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);}
   transition:transform .05s ease, background .2s ease
 }
 .ui-btn.choice{
-  padding:22px 28px;
+  /* ~10% larger buttons & numbers */
+  padding:24px 31px;
   font-weight:800;
-  font-size:26px;
-  min-width:84px;
-  min-height:72px;
-  border-radius:16px;
+  font-size:29px;
+  min-width:92px;
+  min-height:79px;
+  border-radius:18px;
 }
 .ui-btn:hover{transform:translateY(-1px)}
 .ui-btn:focus-visible{outline-color:var(--accent)}
