@@ -65,6 +65,9 @@
       this.skipStartPromptOnce = false;
       this.startNewRoundAfterIntro = false;
 
+      // Options
+      this.removeSuspense = false; // new toggle from Setup
+
       // HUD
       this.hud = { remainingPlayers: 0, remainingChoices: 0 };
     }
@@ -102,6 +105,8 @@
       this.skipStartPromptOnce = false;
       this.startNewRoundAfterIntro = false;
 
+      // keep removeSuspense as-is until next Setup (it’s set there)
+      // HUD
       this.hud = { remainingPlayers: 0, remainingChoices: 0 };
     }
 
@@ -156,7 +161,7 @@
       this.currentPlayerIdx = i;
     }
 
-    // Suspense bias function (unchanged)
+    // Suspense bias function
     computeRevealDelay(){
       const total = this.roundChoices.length;
       const remainingChoices = this.roundChoices.filter(c=>!c.taken).length;
@@ -187,8 +192,7 @@
 
     /**
      * @param {number} index
-     * @param {boolean} forcePop - if true (CTRL-held), treat this index as the bomb,
-     *                             BUT follow the same suspense/reveal flow as normal.
+     * @param {boolean} forcePop - if true (CTRL-held), treat this index as the bomb.
      */
     selectChoice(index, forcePop=false){
       if(this.state!==States.PLAYING) return;
@@ -200,14 +204,35 @@
       window.audio?.fadeMusicTo(0, 1000);
 
       this.selectedChoice = index;
-
       const now = performance.now();
 
-      if(forcePop){
-        // Guarantee a pop on this pick, but do NOT skip suspense.
-        // We simply set the armed index to this pick and let the normal reveal run.
+      if (forcePop) {
+        // Ensure this pick is the bomb; regular flow (suspense or not) handles the rest
         this.armedIndex = index;
-        // IMPORTANT: don't mark taken yet; normal flow handles it after suspense.
+      }
+
+      // If suspense is removed, resolve immediately (no waiting)
+      if (this.removeSuspense) {
+        const c = this.roundChoices[this.selectedChoice];
+        if (c) c.taken = true;
+
+        const armed = (this.selectedChoice === this.armedIndex);
+        if (armed){
+          window.audio?.playSfx("countdown");
+          this.countdownStartAt = now;
+          this.countdownEndAt   = now + 4000; // total expansion window
+          this.balloonScale = 1;
+          this.countdownValue = null;         // first tick shows "3" overlay
+          this.nextTickAt = now + 1000;       // first number at +1s
+          this.state = States.COUNTDOWN;
+        } else {
+          window.audio?.playSfx("dud");
+          this.dudShownAt   = now;
+          this.showDudUntil = now + 1000;
+          this.state = States.SAFE_HOLD;
+          this.pendingReveal = { at: now + 1000 }; // small breathing room before next player
+        }
+        return;
       }
 
       // Normal (and forced) flow → suspense delay, then reveal
