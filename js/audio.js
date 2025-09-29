@@ -1,7 +1,7 @@
 /**
  * audio.js
  * AudioManager: WebAudio if possible; else HTMLAudio fallbacks.
- * Adds global volume cycling: full → half → mute.
+ * Global volume now cycles: 100% → 75% → 50% → 25% → 0% → (repeat).
  */
 (function(){
   class AudioManager {
@@ -15,16 +15,17 @@
       this.enabled = false;
       this.preferred = "webaudio";
 
-      // Base (per-track) volumes
+      // Base per-track vols
       this.musicVolume = (window.CONSTS?.AUDIO?.musicVolume) ?? 0.5;
-      this.sfxVolume = (window.CONSTS?.AUDIO?.sfxVolume) ?? 0.9;
+      this.sfxVolume   = (window.CONSTS?.AUDIO?.sfxVolume) ?? 0.9;
 
-      // Global scalar applied to everything (1.0, 0.5, 0)
-      this.globalVolume = 1.0;
-      this._level = "full"; // "full" | "half" | "mute"
+      // Volume steps and state
+      this._steps = [1.0, 0.75, 0.5, 0.25, 0.0];
+      this._stepIndex = 0; // 0=100%
+      this.globalVolume = this._steps[this._stepIndex];
+      this._muted = (this.globalVolume === 0);
 
       this._currentTrack = "none"; // "menu" | "game" | "none"
-      this._muted = false; // derived from globalVolume===0 for back-compat
     }
 
     async init(){
@@ -33,16 +34,16 @@
         if(!AC) throw new Error("No AudioContext");
         this.ctx = new AC();
         this.masterGain = this.ctx.createGain();
-        this.musicGain = this.ctx.createGain();
-        this.masterGain.gain.value = this.globalVolume; // honor global level
-        this.musicGain.gain.value = this.musicVolume;
+        this.musicGain  = this.ctx.createGain();
+        this.masterGain.gain.value = this.globalVolume;
+        this.musicGain.gain.value  = this.musicVolume;
         this.musicGain.connect(this.masterGain);
         this.masterGain.connect(this.ctx.destination);
         this.enabled = true;
         this.preferred = "webaudio";
       }catch(e){
-        console.warn("WebAudio unavailable, will use HTMLAudio fallback.", e);
-        this.enabled = true; // enabled but fallback will be used
+        console.warn("WebAudio unavailable, falling back to HTMLAudio.", e);
+        this.enabled = true;
         this.preferred = "htmlaudio";
       }
     }
@@ -53,15 +54,15 @@
       }
     }
 
-    // --- Volume controls (global) ---
-    setVolumeLevel(level){
-      // level: "full" | "half" | "mute"
-      this._level = level;
-      this.globalVolume = (level==="full") ? 1.0 : (level==="half" ? 0.5 : 0.0);
-      this._muted = (this.globalVolume===0);
+    // ---- Volume controls (global) ----
+    setVolumeIndex(i){
+      // clamp & apply step
+      this._stepIndex = ((i % this._steps.length) + this._steps.length) % this._steps.length;
+      this.globalVolume = this._steps[this._stepIndex];
+      this._muted = (this.globalVolume === 0);
 
       if(this.preferred==="webaudio" && this.masterGain){
-        this.masterGain.gain.value = this.globalVolume; // scales both music + sfx
+        this.masterGain.gain.value = this.globalVolume;
       }else{
         if(this.musicEl){
           this.musicEl.volume = this.musicVolume * this.globalVolume;
@@ -69,29 +70,34 @@
         }
       }
     }
-    getVolumeLevel(){ return this._level; }
+    cycleVolume(){
+      this.setVolumeIndex(this._stepIndex + 1);
+    }
+    getVolumeIndex(){ return this._stepIndex; }
+    getVolumePercent(){ return Math.round(this._steps[this._stepIndex] * 100); }
+    getVolumeLabel(){ return `Volume: ${this.getVolumePercent()}%`; }
 
-    // Back-compat for existing calls (mapped to mute/unmute)
-    setMuted(m){ this.setVolumeLevel(m ? "mute" : "full"); }
-    isMuted(){ return this.globalVolume===0; }
+    // Back-compat helpers
+    setMuted(m){ this.setVolumeIndex(m ? this._steps.length - 1 : 0); }
+    isMuted(){ return this.globalVolume === 0; }
 
     playSfx(name){
       if(!this.enabled) return;
-      if(this.globalVolume===0) return; // silence SFX when muted
+      if(this.globalVolume===0) return;
 
       const path = window.ASSET_PATHS.SFX_PATHS[name];
       if(this.preferred==="webaudio" && this.ctx && this.assets.sfx[name]){
         const src = this.ctx.createBufferSource();
         src.buffer = this.assets.sfx[name];
         const gain = this.ctx.createGain();
-        gain.gain.value = this.sfxVolume; // masterGain applies globalVolume
+        gain.gain.value = this.sfxVolume; // masterGain applies global scalar
         src.connect(gain).connect(this.masterGain);
         src.start(0);
       }else{
         const a = new Audio(path);
         a.volume = this.sfxVolume * this.globalVolume;
-        a.muted = (this.globalVolume===0);
-        a.play().catch(()=>{/* ignore */});
+        a.muted  = (this.globalVolume===0);
+        a.play().catch(()=>{});
       }
     }
 
@@ -102,7 +108,6 @@
         this.musicEl = new Audio(url);
         this.musicEl.loop = loop;
         this.musicEl.muted = (this.globalVolume===0);
-        // In WebAudio, we route through a MediaElementSource to musicGain → masterGain
         this.musicEl.volume = (this.preferred==="webaudio") ? 1 : (this.musicVolume * this.globalVolume);
         if(this.preferred==="webaudio" && this.ctx){
           const src = this.ctx.createMediaElementSource(this.musicEl);
@@ -110,7 +115,7 @@
         }
         await this.musicEl.play();
       }catch(e){
-        console.warn("Music play failed (likely autoplay). Will show enable button and retry after user gesture.", e);
+        console.warn("Music play failed (likely autoplay). Showing enable button.", e);
         if (this.musicEl) {
           try { this.musicEl.pause(); } catch(_) {}
           this.musicEl.src = "";
@@ -144,7 +149,7 @@
     setMusicVolume(v){
       this.musicVolume = Math.max(0, Math.min(1, v));
       if(this.preferred==="webaudio" && this.musicGain){
-        this.musicGain.gain.value = this.musicVolume; // masterGain still applies global
+        this.musicGain.gain.value = this.musicVolume;
       }else if(this.musicEl){
         this.musicEl.volume = this.musicVolume * this.globalVolume;
       }
@@ -152,7 +157,7 @@
 
     fadeMusicTo(target, ms){
       if(this.globalVolume===0){
-        // keep silent when muted; snap to 0
+        // stay silent if globally muted
         if(this.preferred!=="webaudio" && this.musicEl) this.musicEl.volume = 0;
         return;
       }
@@ -164,8 +169,8 @@
         this.musicGain.gain.setValueAtTime(this.musicGain.gain.value, now);
         this.musicGain.gain.linearRampToValueAtTime(target, end);
       }else if(this.musicEl){
-        const start = this.musicEl.volume;                // already includes global scalar
-        const goal  = target * this.globalVolume;         // scale target by global
+        const start = this.musicEl.volume;
+        const goal  = target * this.globalVolume; // respect global
         const startT = performance.now();
         const step = (now)=>{
           const t = Math.min(1, (now-startT)/ms);
