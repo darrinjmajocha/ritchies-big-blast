@@ -2,13 +2,13 @@
   const States = Object.freeze({
     TITLE: "TITLE",
     SETUP: "SETUP",
-    INTRO_ANIM: "INTRO_ANIM",     // inflate/zoom in
-    START_PROMPT: "START_PROMPT", // show "Start!" (fade 3s)
+    INTRO_ANIM: "INTRO_ANIM",
+    START_PROMPT: "START_PROMPT",
     PLAYING: "PLAYING",
-    REVEAL: "REVEAL",             // suspense period after plunger
-    SAFE_HOLD: "SAFE_HOLD",       // ~1s pause after dud + "Dud!" text
-    COUNTDOWN: "COUNTDOWN",       // 1.0s beat, then 3→2→1 at 1.0s each
-    EXPLODING: "EXPLODING",       // pop/flash
+    REVEAL: "REVEAL",
+    SAFE_HOLD: "SAFE_HOLD",
+    COUNTDOWN: "COUNTDOWN",
+    EXPLODING: "EXPLODING",
     GAME_OVER: "GAME_OVER",
   });
 
@@ -34,36 +34,36 @@
       this.armedIndex = -1;
       this.rng = new RNG();
 
-      this.pendingReveal = null;   // { at: timestamp }
+      this.pendingReveal = null;
       this.selectedChoice = -1;
 
       this.winner = null;
 
-      // Intro (inflate) animation
-      this.introAnimT = 0;         // 0..1
-      this.introDurMs = 3000;      // first inflate
-      this.nextIntroDurMs = 3000;  // after eliminations becomes 1500
+      // Intro animation (inflate/zoom)
+      this.introAnimT = 0;
+      this.introDurMs = 3000;
+      this.nextIntroDurMs = 3000;
       this.introStartAt = 0;
 
-      this.showRitchie = false;    // hidden until after intro
-      this.balloonScale = 1;       // for drawPlaying (inflation on countdown)
+      this.showRitchie = false;
+      this.balloonScale = 1;
 
-      this.startPromptUntil = 0;   // when to end the "Start!" text
-      this.explodingUntil = 0;     // white flash / gif window
+      this.startPromptUntil = 0;
+      this.explodingUntil = 0;
 
-      // Dud overlay
+      // Dud overlay timing
       this.showDudUntil = 0;
-      this.dudShownAt = 0;         // NEW: for fade-in timing
+      this.dudShownAt = 0;
 
-      // Countdown
+      // Countdown timing
       this.countdownStartAt = 0;
-      this.countdownEndAt = 0;     // for balloon expansion pacing
-      this.countdownValue = null;  // 3,2,1
+      this.countdownEndAt = 0;
+      this.countdownValue = null;
       this.nextTickAt = 0;
 
       // Flags
-      this.skipStartPromptOnce = false;      // true for post-elimination & all-duds re-intro
-      this.startNewRoundAfterIntro = false;  // true only after elimination
+      this.skipStartPromptOnce = false;
+      this.startNewRoundAfterIntro = false;
 
       // HUD
       this.hud = { remainingPlayers: 0, remainingChoices: 0 };
@@ -90,6 +90,7 @@
 
       this.startPromptUntil = 0;
       this.explodingUntil = 0;
+
       this.showDudUntil = 0;
       this.dudShownAt = 0;
 
@@ -121,7 +122,7 @@
       this.state = States.INTRO_ANIM;
       window.audio?.playSfx("priming");
 
-      // Start game BGM immediately at 0 and fade up over 5s while intro + "Start!" happen
+      // Start game BGM immediately and fade up
       window.audio?.setMusicVolume(window.CONSTS.AUDIO.musicVolume);
       window.audio?.playGameMusic(true);
       window.audio?.fadeMusicTo(window.CONSTS.AUDIO.musicVolume, 5000);
@@ -155,21 +156,21 @@
       this.currentPlayerIdx = i;
     }
 
-    // Suspense bias combines within-round progress + overall game progress
+    // Suspense bias function (unchanged)
     computeRevealDelay(){
       const total = this.roundChoices.length;
       const remainingChoices = this.roundChoices.filter(c=>!c.taken).length;
-      const roundProgress = 1 - (remainingChoices-1)/(total-1 || 1); // 0 → start of round, 1 → last pick
-      const roundWeight = Math.pow(roundProgress, 3);                // strong bias late in round
+      const roundProgress = 1 - (remainingChoices-1)/(total-1 || 1);
+      const roundWeight = Math.pow(roundProgress, 3);
 
       const alive = this.players.filter(p=>p.alive).length;
       const init = Math.max(2, this.initialPlayersCount || alive);
-      const gameProgress = 1 - (alive-1)/(init-1);                   // 0 → start of game, 1 → nearly done
-      const globalMult = 1 + 0.8 * gameProgress;                     // up to ~1.8× near the end
+      const gameProgress = 1 - (alive-1)/(init-1);
+      const globalMult = 1 + 0.8 * gameProgress;
 
-      const baseMin = 500;       // ms
-      const extraMax = 4500;     // ms (cap still 5s)
-      const r = this.rng.next(); // 0..1 random
+      const baseMin = 500;
+      const extraMax = 4500;
+      const r = this.rng.next();
       let delay = baseMin + (extraMax * roundWeight * (0.5 + 0.5*r));
       delay *= globalMult;
 
@@ -177,7 +178,7 @@
       delay = Math.max(baseMin, delay - reduction);
 
       if(gameProgress >= 0.75){
-        const extraFloor = 1000 + 1000 * ((gameProgress - 0.75) / 0.25); // 1000→2000ms
+        const extraFloor = 1000 + 1000 * ((gameProgress - 0.75) / 0.25);
         delay = Math.max(delay, extraFloor);
       }
 
@@ -186,14 +187,15 @@
 
     /**
      * @param {number} index
-     * @param {boolean} forcePop - if true (CTRL-held), treat as armed and go straight to countdown
+     * @param {boolean} forcePop - if true (CTRL-held), treat this index as the bomb,
+     *                             BUT follow the same suspense/reveal flow as normal.
      */
     selectChoice(index, forcePop=false){
       if(this.state!==States.PLAYING) return;
       const choice = this.roundChoices[index];
       if(!choice || choice.taken) return;
 
-      // Plunger: 1s, duck music to 0 over that second
+      // Plunger SFX and music duck
       window.audio?.playSfx("plunger");
       window.audio?.fadeMusicTo(0, 1000);
 
@@ -202,22 +204,14 @@
       const now = performance.now();
 
       if(forcePop){
-        // Treat as if this selection is the bomb; keep visuals (countdown) the same,
-        // but skip the random suspense wait.
-        choice.taken = true;
-        this.armedIndex = index; // for styling consistency if needed
-        window.audio?.playSfx("countdown");
-        this.countdownStartAt = now;
-        this.countdownEndAt   = now + 4000;
-        this.balloonScale = 1;
-        this.countdownValue = null;
-        this.nextTickAt = now + 1000;
-        this.state = States.COUNTDOWN;
-        return;
+        // Guarantee a pop on this pick, but do NOT skip suspense.
+        // We simply set the armed index to this pick and let the normal reveal run.
+        this.armedIndex = index;
+        // IMPORTANT: don't mark taken yet; normal flow handles it after suspense.
       }
 
-      // Normal flow → suspense; reveal after plunger + biased delay
-      const extraSmallGamePad = (this.initialPlayersCount <= 4) ? 1000 : 0; // additional default 1s
+      // Normal (and forced) flow → suspense delay, then reveal
+      const extraSmallGamePad = (this.initialPlayersCount <= 4) ? 1000 : 0; // default +1s pad for small games
       const delay = 1000 + extraSmallGamePad + this.computeRevealDelay();
       this.pendingReveal = { at: now + delay };
       this.state = States.REVEAL;
@@ -246,7 +240,7 @@
               this.state = States.PLAYING;
             } else {
               this.state = States.START_PROMPT;
-              this.startPromptUntil = now + 3000; // 3s
+              this.startPromptUntil = now + 3000;
               window.audio?.playSfx("start");
               this.startRound();
             }
@@ -269,17 +263,17 @@
             if(armed){
               window.audio?.playSfx("countdown");
               this.countdownStartAt = now;
-              this.countdownEndAt   = now + 4000; // total window for balloon expansion
+              this.countdownEndAt   = now + 4000;
               this.balloonScale = 1;
-              this.countdownValue = null;         // shown after first tick
-              this.nextTickAt = now + 1000;       // first number at +1s
+              this.countdownValue = null;
+              this.nextTickAt = now + 1000;
               this.state = States.COUNTDOWN;
             }else{
               window.audio?.playSfx("dud");
               this.dudShownAt = now;
               this.showDudUntil = now + 1000;
               this.state = States.SAFE_HOLD;
-              this.pendingReveal = { at: now + 1000 }; // 1s breathing room
+              this.pendingReveal = { at: now + 1000 };
             }
           }
           break;
@@ -296,10 +290,10 @@
               this.hud.remainingChoices = n;
 
               this.showRitchie = false;
-              this.introDurMs = 1500;             // 2x faster
+              this.introDurMs = 1500;
               this.introStartAt = now;
               this.introAnimT = 0;
-              this.skipStartPromptOnce = true;     // but NOT a new round
+              this.skipStartPromptOnce = true;
               this.startNewRoundAfterIntro = false;
               this.state = States.INTRO_ANIM;
               window.audio?.playSfx("priming");
@@ -314,7 +308,7 @@
 
         case States.COUNTDOWN: {
           const t = clamp01((now - this.countdownStartAt) / (this.countdownEndAt - this.countdownStartAt));
-          this.balloonScale = 1 + 1.0 * easeOutCubic(t); // up to ~2.0x
+          this.balloonScale = 1 + 1.0 * easeOutCubic(t);
 
           if(now >= this.nextTickAt){
             if(this.countdownValue === null){
@@ -326,7 +320,7 @@
             }else{
               this.showRitchie = false;
               window.audio?.playSfx("boom");
-              this.explodingUntil = now + 1000;   // 1s (was 2200ms)
+              this.explodingUntil = now + 1000;
               this.state = States.EXPLODING;
             }
           }
@@ -348,7 +342,7 @@
               this.introAnimT = 0;
               this.showRitchie = false;
               this.skipStartPromptOnce = true;
-              this.startNewRoundAfterIntro = true;   // <-- new round after intro completes
+              this.startNewRoundAfterIntro = true;
               this.state = States.INTRO_ANIM;
               window.audio?.playSfx("priming");
             }
@@ -356,7 +350,7 @@
           break;
 
         case States.GAME_OVER:
-          // Wait for UI input (Main Menu / Play Again)
+          // wait for UI buttons
           break;
       }
     }
