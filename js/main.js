@@ -1,6 +1,7 @@
 /**
  * main.js
  * Bootstraps app, manages state loop, inputs, resizing, and ties everything together.
+ * Adds: how-to-play video between Title → Setup, volume cycling button, CTRL+click force-pop.
  */
 (async function(){
   const canvas = document.getElementById("gameCanvas");
@@ -9,7 +10,7 @@
   const loadingLabel = document.getElementById("loadingLabel");
   const enableBtn = document.getElementById("enableSoundBtn");
   const resetBtn = document.getElementById("resetBtn");
-  const muteBtn  = document.getElementById("muteBtn");
+  const muteBtn  = document.getElementById("muteBtn"); // repurposed as Volume button
 
   const assets = new AssetManager((pct)=>{ loadingLabel.textContent = `Loading… ${pct}%`; });
   window.audio = new AudioManager(assets);
@@ -26,6 +27,11 @@
   window.addEventListener("resize", resize, {passive:true});
   resize();
 
+  // Track CTRL state for "force pop"
+  window._ctrlHeld = false;
+  window.addEventListener("keydown", (e)=>{ if(e.key==="Control") window._ctrlHeld = true; }, {passive:true});
+  window.addEventListener("keyup",   (e)=>{ if(e.key==="Control") window._ctrlHeld = false; }, {passive:true});
+
   // --- First interaction bootstrap for audio/menu music ---
   let firstInteractionArmed = true;
   const armFirstInteraction = ()=>{
@@ -41,6 +47,54 @@
     };
     document.addEventListener("pointerdown", handler, true);
   };
+
+  // --- How-to-play video overlay ---
+  let howtoOverlay = null;
+  function showHowToVideo(){
+    // stop menu music while video plays
+    window.audio?.stopMusic();
+
+    if(!howtoOverlay){
+      const ov = document.createElement("div");
+      ov.id = "howtoOverlay";
+      Object.assign(ov.style, {
+        position:"absolute", inset:"0", background:"#000",
+        display:"flex", alignItems:"center", justifyContent:"center",
+        zIndex:"9999", cursor:"pointer"
+      });
+
+      const vid = document.createElement("video");
+      vid.id = "howToVideo";
+      vid.src = "assets/videos/howtoplay.mp4";
+      vid.loop = true;
+      vid.playsInline = true;
+      vid.preload = "auto";
+      vid.controls = false;
+      Object.assign(vid.style, {
+        width:"100%", height:"100%", objectFit:"contain", outline:"none"
+      });
+
+      ov.appendChild(vid);
+      howtoOverlay = ov;
+    }
+
+    const app = document.getElementById("app");
+    app.appendChild(howtoOverlay);
+
+    const vidEl = howtoOverlay.querySelector("video");
+    const advance = ()=>{
+      vidEl.pause();
+      howtoOverlay.removeEventListener("pointerdown", advance, true);
+      howtoOverlay.remove();
+      gotoSetup(); // proceed to player select
+    };
+    howtoOverlay.addEventListener("pointerdown", advance, true);
+
+    // user gesture already happened (click Play), should be allowed
+    vidEl.currentTime = 0;
+    vidEl.muted = false;
+    vidEl.play().catch(()=>{/* if blocked, user will click overlay to advance anyway */});
+  }
 
   // --- State controls ---
   function gotoTitle(){
@@ -63,7 +117,8 @@
     const row = ui.row("main");
     const play = ui.button("Play", "primary", async ()=>{
       await window.audio.resume();
-      gotoSetup();
+      // NEW: show how-to-play looping video before Setup
+      showHowToVideo();
     }, "Start the game");
     row.appendChild(play);
   }
@@ -109,7 +164,12 @@
     const putAllInBottom = (n <= 5);
 
     function makeBtn(c, idx){
-      const b = ui.button(c.label, "choice", ()=>{ game.selectChoice(idx); }, `Choose number ${c.label}`);
+      const b = ui.button(
+        c.label,
+        "choice",
+        (e)=>{ game.selectChoice(idx, (window._ctrlHeld || !!e.ctrlKey)); },
+        `Choose number ${c.label}`
+      );
       b.disabled = c.taken || game.state!==GameStates.PLAYING;
       b.classList.toggle("safe", c.taken && idx!==game.armedIndex);
       b.classList.toggle("danger", c.taken && idx===game.armedIndex);
@@ -167,7 +227,7 @@
     if(num!==null){
       const idx = num-1;
       if(idx>=0 && idx<game.roundChoices.length){
-        game.selectChoice(idx);
+        game.selectChoice(idx, !!e.ctrlKey);
       }
     }
   });
@@ -189,18 +249,23 @@
     gotoSetup();
   });
 
-  // Mute toggle
-  function refreshMuteBtn(){
-    const muted = window.audio.isMuted();
-    muteBtn.textContent = muted ? "Unmute" : "Mute";
-    muteBtn.setAttribute("aria-pressed", String(muted));
-    muteBtn.setAttribute("aria-label", muted ? "Unmute sound" : "Mute sound");
+  // Volume cycle button (full → half → mute → full)
+  function refreshVolumeBtn(){
+    const lvl = window.audio.getVolumeLevel();
+    const label = (lvl==="full") ? "Volume: 100%" : (lvl==="half" ? "Volume: 50%" : "Volume: Mute");
+    muteBtn.textContent = label;
+    muteBtn.setAttribute("aria-pressed", String(lvl==="mute"));
+    muteBtn.setAttribute("aria-label", label);
   }
   muteBtn.addEventListener("click", ()=>{
-    window.audio.setMuted(!window.audio.isMuted());
-    refreshMuteBtn();
+    const cur = window.audio.getVolumeLevel();
+    const next = (cur==="full") ? "half" : (cur==="half" ? "mute" : "full");
+    window.audio.setVolumeLevel(next);
+    refreshVolumeBtn();
   });
-  refreshMuteBtn();
+  // default: full volume
+  window.audio.setVolumeLevel("full");
+  refreshVolumeBtn();
 
   // --- Main loop ---
   function loop(){
