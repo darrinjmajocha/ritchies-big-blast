@@ -1,15 +1,7 @@
 /**
  * audio.js
  * AudioManager: WebAudio if possible; else HTMLAudio fallbacks.
- * Exposes:
- *   playSfx(name)
- *   playGameMusic(loop=true)
- *   playMenuMusic(loop=true)
- *   stopMusic()
- *   setMusicVolume(v)
- *   fadeMusicTo(target, ms)
- *   setMuted(bool)
- *   isMuted()
+ * Adds global volume cycling: full → half → mute.
  */
 (function(){
   class AudioManager {
@@ -22,10 +14,17 @@
       this.musicEl = null; // HTMLAudio fallback
       this.enabled = false;
       this.preferred = "webaudio";
+
+      // Base (per-track) volumes
       this.musicVolume = (window.CONSTS?.AUDIO?.musicVolume) ?? 0.5;
       this.sfxVolume = (window.CONSTS?.AUDIO?.sfxVolume) ?? 0.9;
+
+      // Global scalar applied to everything (1.0, 0.5, 0)
+      this.globalVolume = 1.0;
+      this._level = "full"; // "full" | "half" | "mute"
+
       this._currentTrack = "none"; // "menu" | "game" | "none"
-      this._muted = false;
+      this._muted = false; // derived from globalVolume===0 for back-compat
     }
 
     async init(){
@@ -35,7 +34,7 @@
         this.ctx = new AC();
         this.masterGain = this.ctx.createGain();
         this.musicGain = this.ctx.createGain();
-        this.masterGain.gain.value = 1;
+        this.masterGain.gain.value = this.globalVolume; // honor global level
         this.musicGain.gain.value = this.musicVolume;
         this.musicGain.connect(this.masterGain);
         this.masterGain.connect(this.ctx.destination);
@@ -54,32 +53,44 @@
       }
     }
 
-    // --- Mute controls ---
-    setMuted(m){
-      this._muted = !!m;
+    // --- Volume controls (global) ---
+    setVolumeLevel(level){
+      // level: "full" | "half" | "mute"
+      this._level = level;
+      this.globalVolume = (level==="full") ? 1.0 : (level==="half" ? 0.5 : 0.0);
+      this._muted = (this.globalVolume===0);
+
       if(this.preferred==="webaudio" && this.masterGain){
-        this.masterGain.gain.value = this._muted ? 0 : 1;
+        this.masterGain.gain.value = this.globalVolume; // scales both music + sfx
       }else{
-        if(this.musicEl) this.musicEl.muted = this._muted;
+        if(this.musicEl){
+          this.musicEl.volume = this.musicVolume * this.globalVolume;
+          this.musicEl.muted = (this.globalVolume===0);
+        }
       }
     }
-    isMuted(){ return !!this._muted; }
+    getVolumeLevel(){ return this._level; }
+
+    // Back-compat for existing calls (mapped to mute/unmute)
+    setMuted(m){ this.setVolumeLevel(m ? "mute" : "full"); }
+    isMuted(){ return this.globalVolume===0; }
 
     playSfx(name){
       if(!this.enabled) return;
-      if(this._muted) return; // silence SFX when muted
+      if(this.globalVolume===0) return; // silence SFX when muted
+
       const path = window.ASSET_PATHS.SFX_PATHS[name];
       if(this.preferred==="webaudio" && this.ctx && this.assets.sfx[name]){
         const src = this.ctx.createBufferSource();
         src.buffer = this.assets.sfx[name];
         const gain = this.ctx.createGain();
-        gain.gain.value = this.sfxVolume;
+        gain.gain.value = this.sfxVolume; // masterGain applies globalVolume
         src.connect(gain).connect(this.masterGain);
         src.start(0);
       }else{
         const a = new Audio(path);
-        a.volume = this.sfxVolume;
-        a.muted = this._muted;
+        a.volume = this.sfxVolume * this.globalVolume;
+        a.muted = (this.globalVolume===0);
         a.play().catch(()=>{/* ignore */});
       }
     }
@@ -90,15 +101,15 @@
         this.stopMusic();
         this.musicEl = new Audio(url);
         this.musicEl.loop = loop;
-        this.musicEl.muted = this._muted;
-        this.musicEl.volume = this.preferred==="webaudio" ? 1 : this.musicVolume;
+        this.musicEl.muted = (this.globalVolume===0);
+        // In WebAudio, we route through a MediaElementSource to musicGain → masterGain
+        this.musicEl.volume = (this.preferred==="webaudio") ? 1 : (this.musicVolume * this.globalVolume);
         if(this.preferred==="webaudio" && this.ctx){
           const src = this.ctx.createMediaElementSource(this.musicEl);
           src.connect(this.musicGain).connect(this.masterGain);
         }
         await this.musicEl.play();
       }catch(e){
-        // IMPORTANT: if autoplay blocks, discard the element so a later retry works.
         console.warn("Music play failed (likely autoplay). Will show enable button and retry after user gesture.", e);
         if (this.musicEl) {
           try { this.musicEl.pause(); } catch(_) {}
@@ -133,14 +144,18 @@
     setMusicVolume(v){
       this.musicVolume = Math.max(0, Math.min(1, v));
       if(this.preferred==="webaudio" && this.musicGain){
-        this.musicGain.gain.value = this.musicVolume;
+        this.musicGain.gain.value = this.musicVolume; // masterGain still applies global
       }else if(this.musicEl){
-        this.musicEl.volume = this.musicVolume;
+        this.musicEl.volume = this.musicVolume * this.globalVolume;
       }
     }
 
     fadeMusicTo(target, ms){
-      if(this._muted) return; // keep silent when muted
+      if(this.globalVolume===0){
+        // keep silent when muted; snap to 0
+        if(this.preferred!=="webaudio" && this.musicEl) this.musicEl.volume = 0;
+        return;
+      }
       target = Math.max(0, Math.min(1, target));
       if(this.preferred==="webaudio" && this.musicGain && this.ctx){
         const now = this.ctx.currentTime;
@@ -149,11 +164,12 @@
         this.musicGain.gain.setValueAtTime(this.musicGain.gain.value, now);
         this.musicGain.gain.linearRampToValueAtTime(target, end);
       }else if(this.musicEl){
-        const start = this.musicEl.volume;
+        const start = this.musicEl.volume;                // already includes global scalar
+        const goal  = target * this.globalVolume;         // scale target by global
         const startT = performance.now();
         const step = (now)=>{
           const t = Math.min(1, (now-startT)/ms);
-          const v = start + (target-start)*t;
+          const v = start + (goal-start)*t;
           this.musicEl.volume = v;
           if(t<1) requestAnimationFrame(step);
         };
